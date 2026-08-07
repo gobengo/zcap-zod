@@ -1,0 +1,9 @@
+{
+  "name": "zcap-zod",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "node --test"
+  }
+}
