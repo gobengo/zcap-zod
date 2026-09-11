@@ -1,15 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { extractExamples, parseExampleContent } from "zcap-spec-examples";
-import { zcapSpecSnapshot } from "zcap-spec-examples/fixtures";
+import { loadSpecExamples, parseExampleContent } from "./zcap-spec-examples.ts";
 import { DelegatedZcap, RootZcap, Zcap, ZcapInvocation } from "../src/zcap-zod.ts";
 
 /**
  * The version of the zcap-spec that `zcap-zod` implements.
  *
- * The snapshot in `zcap-spec-examples` is pinned to this below, so that a
- * fixture regenerated from a different version of the spec fails here loudly
- * rather than silently changing what these tests mean.
+ * `etc/zcap-spec-examples.ndjson` is pinned to this below, so that a fixture
+ * regenerated from a different version of the spec fails here loudly rather
+ * than silently changing what these tests mean.
  */
 const ZCAP_SPEC_URL = "https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/";
 
@@ -89,29 +88,26 @@ function explain(error: { issues: readonly { path: PropertyKey[]; message: strin
     .join(" | ");
 }
 
-await test("the spec snapshot is the version zcap-zod targets", () => {
-  assert.strictEqual(
-    zcapSpecSnapshot.sourceUrl,
-    ZCAP_SPEC_URL,
-    `zcap-spec-examples is pinned to a different spec version (retrieved ${zcapSpecSnapshot.retrievedAt}). ` +
-      `Regenerate it with: npm run fixture:update -- --source-url=${ZCAP_SPEC_URL}`,
-  );
+await test("the vendored examples came from the version zcap-zod targets", () => {
+  for (const example of loadSpecExamples()) {
+    assert.ok(
+      example.url.startsWith(ZCAP_SPEC_URL),
+      `${example.name} came from ${example.url}, not ${ZCAP_SPEC_URL}. ` +
+        `Regenerate the fixture with: npm run fixture:update`,
+    );
+  }
 });
 
-await test("every example in the spec snapshot has a recorded expectation", async () => {
-  const seen: string[] = [];
-  for await (const example of extractExamples(zcapSpecSnapshot.html)) {
-    seen.push(example.name);
-  }
+await test("every vendored example has a recorded expectation", () => {
   assert.deepStrictEqual(
-    seen.sort(),
+    loadSpecExamples().map((example) => example.name).sort(),
     Object.keys(expectations).sort(),
-    `the spec snapshot (${zcapSpecSnapshot.sourceUrl}, retrieved ${zcapSpecSnapshot.retrievedAt}) no longer matches the expectations table`,
+    "etc/zcap-spec-examples.ndjson no longer matches the expectations table",
   );
 });
 
 await test("zcap-zod parses every conformant example from the zcap-spec", async (t) => {
-  for await (const example of extractExamples(zcapSpecSnapshot.html)) {
+  for (const example of loadSpecExamples()) {
     const expectation = expectations[example.name];
     if (expectation?.kind !== "zcap") continue;
     const { schema: schemaName, why } = expectation;
@@ -138,7 +134,7 @@ await test("zcap-zod parses every conformant example from the zcap-spec", async 
 });
 
 await test("zcap-zod rejects the informative examples that lag the v0.4 data model", async (t) => {
-  for await (const example of extractExamples(zcapSpecSnapshot.html)) {
+  for (const example of loadSpecExamples()) {
     const expectation = expectations[example.name];
     if (expectation?.kind !== "non-conformant") continue;
     await t.test(`${example.name} is not a conformant zcap`, () => {
@@ -152,7 +148,7 @@ await test("zcap-zod rejects the informative examples that lag the v0.4 data mod
 });
 
 await test("examples that are not JSON documents are out of scope", async (t) => {
-  for await (const example of extractExamples(zcapSpecSnapshot.html)) {
+  for (const example of loadSpecExamples()) {
     const expectation = expectations[example.name];
     if (expectation?.kind !== "not-a-document") continue;
     await t.test(`${example.name} (${example.mediaType}) has no object representation`, () => {
