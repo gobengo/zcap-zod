@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    // `dom` rather than `@types/node`: the only platform global this library
+    // uses is `URL`, which is a web standard. Building without node types keeps
+    // node-only APIs from creeping in, because this ships to browsers too.
+    "lib": ["es2023", "dom"],
+    "types": [],
+
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    // The source imports siblings as `./zcap-zod.ts` so that `node --test` can
+    // run it directly; `rewriteRelativeImportExtensions` turns those into
+    // `./zcap-zod.js` in the emitted output.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

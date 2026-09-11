@@ -2,8 +2,31 @@
   "name": "zcap-zod",
   "version": "0.0.0",
   "type": "module",
-  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepack": "npm run clean && npm run build",
     "test": "node --test"
-  }
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3",
+    "zcap-spec-examples": "^0.1.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ]
 }
