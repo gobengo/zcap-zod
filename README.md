@@ -4,6 +4,8 @@
 
 Parse and validate root zcaps, delegated zcaps, and capability invocations. Every constraint in the schemas is annotated with the normative statement from the spec that it encodes.
 
+In TypeScript, a successful parse also hands you a **typed** value, so the rest of your code can rely on a zcap's shape without checking it again. See [Why parse? (for TypeScript developers)](#why-parse-for-typescript-developers).
+
 Paste this into any `.html` file. It needs no install and no build:
 
 ```html
@@ -38,6 +40,55 @@ In Node.js or a bundler, [install the package](#install) first. In a browser, ma
   import { RootZcap } from "zcap-zod"
 </script>
 ```
+
+## Why parse? (for TypeScript developers)
+
+`JSON.parse` and `await request.json()` return `any`. TypeScript knows nothing about the value, so it lets everything through: a misspelled field, a field that isn't there, or passing the value to a function that expects something else entirely.
+
+```ts
+const body = await request.json() // any
+body.expiers                      // compiles; undefined at runtime
+isExpired(body)                   // compiles, whatever body really is
+```
+
+Typing it as `unknown` is honest, but then every function that touches it has to check the shape first.
+
+The alternative is to parse **once**, where the data enters your program. What comes out has a type that describes a conforming zcap, and functions written against that type don't need to re-check anything:
+
+```ts
+import { DelegatedZcap } from "zcap-zod"
+
+// These take a DelegatedZcap, not raw JSON. No checking that `expires`
+// exists, or whether `controller` is a string or an array: the type says so.
+function isExpired(zcap: DelegatedZcap, now = new Date()): boolean {
+  return new Date(zcap.expires) <= now
+}
+
+function controllers(zcap: DelegatedZcap): string[] {
+  return typeof zcap.controller === "string" ? [zcap.controller] : zcap.controller
+}
+
+export async function handle(request: Request) {
+  const body: unknown = await request.json()
+  isExpired(body)   // ✗ type error: 'unknown' is not assignable to 'DelegatedZcap'
+
+  const zcap = DelegatedZcap.parse(body) // throws if body doesn't conform
+  isExpired(zcap)   // ✓
+  controllers(zcap) // ✓ and your editor autocompletes zcap.expires, zcap.controller, …
+}
+```
+
+The compiler now stops unvalidated data from reaching `isExpired`. And `.parse()` checks what a type can't express: that `id` is a URI, that `expires` is a date-time, that there is a `capabilityDelegation` proof.
+
+One nuance: delegated zcaps and invocations keep properties they don't recognize (they are JSON-LD, and `@context` can add vocabulary), so their types allow extra keys with type `unknown`. A typo like `zcap.expiers` compiles there, but you can't use it as a string without checking it first. `RootZcap` is strict, so a typo on a root zcap is a compile error.
+
+### What "TypeScript-first" means
+
+[Zod](https://zod.dev), which these schemas are built with, calls itself "TypeScript-first". It means you write the schema once, and the TypeScript type is *derived* from it (`z.infer<typeof DelegatedZcap>`) rather than written by hand next to a separate validator. The type and the runtime check come from the same definition, so they can't drift apart.
+
+`zcap-zod` exports those derived types under the same names as the schemas, so `DelegatedZcap` is both the schema you call `.parse()` on and the type you annotate parameters with.
+
+From plain JavaScript you still get all the runtime checks; the types are a bonus.
 
 ## What it does and does not check
 
