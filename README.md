@@ -412,6 +412,20 @@ By default esm.sh bundles its own copy of `zod`. If your page already imports `z
 </script>
 ```
 
+## JSON Schema
+
+For JSON-Schema-aware tooling, every push to `main` also publishes a JSON Schema (draft 2020-12) generated from these zod schemas:
+
+```
+https://gobengo.github.io/zcap-zod/zcap-zod.schema.json
+```
+
+The root validates any `Zcap`; each exported schema is under `$defs`, so you can refer to one directly, e.g. `https://gobengo.github.io/zcap-zod/zcap-zod.schema.json#/$defs/DelegatedZcap`.
+
+JSON Schema cannot express zod refinements, so this schema is looser than zcap-zod itself: it does not check that URIs parse, that a document carries a conforming `capabilityDelegation`/`capabilityInvocation` proof, or the ordering rules of a `capabilityChain`. Use it for editor hints and coarse checks, and zcap-zod for validation.
+
+Print it locally with `npm run build && npm run json-schema`.
+
 ## Development
 
 ```sh
@@ -420,6 +434,7 @@ npm test     # node --test, against the TypeScript source
 npm run build  # tsc -> dist/*.js + dist/*.d.ts
 npm run dev    # tsc --watch + the demo page at http://localhost:8080/
 npm run build:site  # build + assemble _site/, what GitHub Pages deploys
+npm run json-schema # print the JSON Schema generated from dist/
 ```
 
 Tests run on `node --test` against the TypeScript source directly (Node 22.6+), so most work needs no build.

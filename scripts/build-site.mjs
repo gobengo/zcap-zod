@@ -5,6 +5,9 @@
 //                           rewritten to the vendored copy so any page can
 //                           import it by absolute URL without an import map
 //   _site/vendor/zod/       zod's ESM files
+//   _site/zcap-zod.schema.json
+//                           JSON Schema generated from the zod schemas
+//                           (scripts/json-schema.mjs), for tooling to $ref
 //   _site/build-info.json   commit + timestamp shown on the page
 //
 // Run `npm run build` first (or use `npm run build:site`).
@@ -12,6 +15,7 @@ import { execSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { generateJsonSchema } from "./json-schema.mjs"
 import { rewriteZodImports } from "./rewrite-zod-imports.mjs"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -44,6 +48,10 @@ cpSync(zod, join(out, "vendor", "zod"), {
   filter: (src) =>
     !src.startsWith(join(zod, "src")) && !/\.(cjs|d\.c?ts|d\.mts)$/.test(src),
 })
+writeFileSync(
+  join(out, "zcap-zod.schema.json"),
+  JSON.stringify(await generateJsonSchema(), null, 2) + "\n",
+)
 // Serve files as-is (no Jekyll processing).
 writeFileSync(join(out, ".nojekyll"), "")
 

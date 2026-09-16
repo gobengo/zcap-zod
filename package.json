@@ -37,6 +37,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:site": "npm run build && node scripts/build-site.mjs",
+    "json-schema": "node scripts/json-schema.mjs",
     "dev": "node scripts/dev.mjs",
     "clean": "rm -rf dist",
     "prepack": "npm run clean && npm run build",
