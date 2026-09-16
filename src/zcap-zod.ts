@@ -112,8 +112,44 @@ const AnyProof = z.looseObject({
   proofPurpose: z.string(),
 })
 
-/** > a `proof` field that is an object or an array of objects */
-const ProofOrProofSet = z.union([AnyProof, z.array(AnyProof).min(1)])
+/** Describe a JSON value's type for an error message: "a string", "null", ... */
+function describeJsonType(value: unknown): string {
+  if (value === null) return "null"
+  if (Array.isArray(value)) return "an array"
+  return typeof value === "object" ? "an object" : `a ${typeof value}`
+}
+
+/**
+ * > a `proof` field that is an object or an array of objects
+ *
+ * Without a custom error, zod reports any mismatch of this union as just
+ * "Invalid input", so the message says which of the ways it went wrong.
+ *
+ * @param missing the message for a document with no `proof` at all
+ */
+function proofOrProofSet(missing: string) {
+  return z.union([AnyProof, z.array(AnyProof).min(1)], {
+    error: ({ input }) => {
+      if (input === undefined) return missing
+      if (typeof input !== "object" || input === null) {
+        return `proof MUST be an object or an array of objects, not ${describeJsonType(input)}.`
+      }
+      const proofs: unknown[] = Array.isArray(input) ? input : [input]
+      const index = proofs.findIndex(
+        (proof) =>
+          typeof proof !== "object" ||
+          proof === null ||
+          Array.isArray(proof) ||
+          typeof (proof as { proofPurpose?: unknown }).proofPurpose !== "string",
+      )
+      const where = Array.isArray(input) ? `proof[${index}]` : "proof"
+      const bad = proofs[index]
+      return typeof bad === "object" && bad !== null && !Array.isArray(bad)
+        ? `Each proof MUST have a string proofPurpose saying what it is for; ${where} has none.`
+        : `Each proof MUST be an object; ${where} is ${describeJsonType(bad)}.`
+    },
+  })
+}
 
 /**
  * The ordered ancestry of a delegated zcap.
@@ -298,7 +334,9 @@ export const DelegatedZcap = z
      * > of objects that each express a DI proof. At least one of these proofs
      * > MUST be a zcap capability delegation proof.
      */
-    proof: ProofOrProofSet,
+    proof: proofOrProofSet(
+      "A delegated zcap MUST have a proof field that is an object or an array of objects, at least one of which is a capabilityDelegation proof.",
+    ),
   })
   .superRefine(requireConformingProof(CapabilityDelegationProof, "capabilityDelegation"))
 
@@ -322,7 +360,14 @@ export const ZcapInvocation = z
       .optional(),
     /** > An invocation SHOULD have an id (which may also serve as a nonce). */
     id: URI.optional(),
-    proof: ProofOrProofSet,
+    /**
+     * > an invocation consists of a linked data object which MUST have a proof
+     * > property with a value containing: a proofPurpose of
+     * > capabilityInvocation
+     */
+    proof: proofOrProofSet(
+      "An invocation MUST have a proof property with a capabilityInvocation proof (an object, or an array of objects).",
+    ),
   })
   .superRefine(requireConformingProof(CapabilityInvocationProof, "capabilityInvocation"))
 

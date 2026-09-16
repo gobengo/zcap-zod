@@ -88,6 +88,13 @@ function assertRejects(schema: { safeParse(v: unknown): { success: boolean } }, 
   assert.ok(!schema.safeParse(value).success, `expected to reject (${why})`);
 }
 
+/** The [path, message] of every issue, for asserting on error messages. */
+function issuesOf(schema: { safeParse(v: unknown): { success: boolean } }, value: unknown): [string, string][] {
+  const result = schema.safeParse(value) as { success: boolean; error?: { issues: { path: PropertyKey[]; message: string }[] } };
+  assert.ok(!result.success, "expected to reject");
+  return result.error!.issues.map((i) => [i.path.join("."), i.message]);
+}
+
 await test("root zcap", async (t) => {
   await t.test("accepts a conformant root zcap", () => {
     assertAccepts(RootZcap, validRoot, "all four required fields");
@@ -163,6 +170,21 @@ await test("delegated zcap", async (t) => {
       result.error.issues.map((i) => [i.path.join("."), i.message]),
       [["@context", 'A delegated zcap MUST have an @context field with an array where the first value is "https://w3id.org/zcap/v1".']],
     );
+  });
+
+  await t.test("explains what is wrong with proof", () => {
+    assert.deepStrictEqual(issuesOf(DelegatedZcap, withChanges(validDelegated, { proof: undefined })), [
+      ["proof", "A delegated zcap MUST have a proof field that is an object or an array of objects, at least one of which is a capabilityDelegation proof."],
+    ]);
+    assert.deepStrictEqual(issuesOf(DelegatedZcap, withChanges(validDelegated, { proof: "z3t9" })), [
+      ["proof", "proof MUST be an object or an array of objects, not a string."],
+    ]);
+    assert.deepStrictEqual(issuesOf(DelegatedZcap, withChanges(validDelegated, { proof: { type: "DataIntegrityProof" } })), [
+      ["proof", "Each proof MUST have a string proofPurpose saying what it is for; proof has none."],
+    ]);
+    assert.deepStrictEqual(issuesOf(DelegatedZcap, withChanges(validDelegated, { proof: [validDelegated.proof, 42] })), [
+      ["proof", "Each proof MUST be an object; proof[1] is a number."],
+    ]);
   });
 
   // "an `expires` field that expresses an XSD date-time"
@@ -268,6 +290,21 @@ await test("delegated zcap", async (t) => {
 });
 
 await test("invocation", async (t) => {
+  await t.test("explains what is wrong with proof", () => {
+    assert.deepStrictEqual(issuesOf(ZcapInvocation, withChanges(validInvocation, { proof: undefined })), [
+      ["proof", "An invocation MUST have a proof property with a capabilityInvocation proof (an object, or an array of objects)."],
+    ]);
+    assert.deepStrictEqual(issuesOf(ZcapInvocation, withChanges(validInvocation, { proof: "z3t9" })), [
+      ["proof", "proof MUST be an object or an array of objects, not a string."],
+    ]);
+    assert.deepStrictEqual(issuesOf(ZcapInvocation, withChanges(validInvocation, { proof: { type: "DataIntegrityProof" } })), [
+      ["proof", "Each proof MUST have a string proofPurpose saying what it is for; proof has none."],
+    ]);
+    assert.deepStrictEqual(issuesOf(ZcapInvocation, withChanges(validInvocation, { proof: [validInvocation.proof, 42] })), [
+      ["proof", "Each proof MUST be an object; proof[1] is a number."],
+    ]);
+  });
+
   await t.test("accepts a conformant invocation", () => {
     assertAccepts(ZcapInvocation, validInvocation, "all required proof properties");
     assertAccepts(Zcap, validInvocation, "via the Zcap union");
