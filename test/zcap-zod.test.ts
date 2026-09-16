@@ -113,6 +113,15 @@ await test("root zcap", async (t) => {
     assertRejects(RootZcap, withChanges(validRoot, { "@context": ["https://w3id.org/zcap/v1"] }), "root @context MUST be a string");
   });
 
+  await t.test("explains a missing @context by quoting the spec", () => {
+    const result = RootZcap.safeParse(withChanges(validRoot, { "@context": undefined }));
+    assert.ok(!result.success);
+    assert.deepStrictEqual(
+      result.error.issues.map((i) => [i.path.join("."), i.message]),
+      [["@context", 'A root zcap MUST have an @context field that is a string with the value "https://w3id.org/zcap/v1".']],
+    );
+  });
+
   // "Note: A root zcap MUST NOT have any other fields."
   await t.test("rejects any other field", () => {
     assertRejects(RootZcap, withChanges(validRoot, { allowedAction: ["read"] }), "root MUST NOT have other fields");
@@ -144,6 +153,15 @@ await test("delegated zcap", async (t) => {
       DelegatedZcap,
       withChanges(validDelegated, { "@context": ["https://autopower.example/", "https://w3id.org/zcap/v1"] }),
       "the zcap context MUST be first",
+    );
+  });
+
+  await t.test("explains a missing @context by quoting the spec", () => {
+    const result = DelegatedZcap.safeParse(withChanges(validDelegated, { "@context": undefined }));
+    assert.ok(!result.success);
+    assert.deepStrictEqual(
+      result.error.issues.map((i) => [i.path.join("."), i.message]),
+      [["@context", 'A delegated zcap MUST have an @context field with an array where the first value is "https://w3id.org/zcap/v1".']],
     );
   });
 

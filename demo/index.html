@@ -31,6 +31,7 @@
     pre.output { max-height: 16rem; overflow: auto; }
     .copy { position: absolute; top: .4rem; right: .4rem; font: inherit; font-size: .75rem;
             padding: .15rem .5rem; cursor: pointer; }
+    .description { margin: 0 0 .5rem; }
     .label { color: var(--muted); font-size: .8rem; margin: .75rem 0 0; }
     .meta { color: var(--muted); font-size: .875rem; margin-top: 2rem; }
   </style>
@@ -89,6 +90,125 @@ console.log(result.error.issues)`,
         check: ({ result }) => ({
           ok: result.success === false,
           output: result.success ? { unexpectedlyAccepted: result.data } : result.error.issues,
+        }),
+      },
+      // Walkthrough: validate a root zcap, see why it fails, fix it.
+      {
+        name: "Walkthrough 1a: a root zcap missing @context is rejected, with the reason",
+        description: "Validate a root zcap with RootZcap.safeParse. This one leaves out @context, so validation fails and each issue says which property is wrong and which rule of the zcap-spec it breaks.",
+        code: `import { RootZcap } from "${MODULE_URL}"
+
+const rootZcap = {
+  id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+  invocationTarget: "https://example.com/foo",
+  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+}
+
+const result = RootZcap.safeParse(rootZcap)
+console.log(result.success) // false
+
+const why = result.error.issues.map((issue) => \`\${issue.path.join(".")}: \${issue.message}\`)
+console.log(why)
+// [ '@context: A root zcap MUST have an @context field that is a string with the value "https://w3id.org/zcap/v1".' ]`,
+        expose: ["result", "why"],
+        check: ({ result, why }) => ({
+          ok: result.success === false && result.error.issues.some((issue) => issue.path[0] === "@context"),
+          output: why ?? result,
+        }),
+      },
+      {
+        name: "Walkthrough 1b: adding @context makes the root zcap valid",
+        description: "Add the missing @context and validate again. The same object now passes, and result.data is the typed root zcap.",
+        code: `import { RootZcap } from "${MODULE_URL}"
+
+const rootZcap = {
+  "@context": "https://w3id.org/zcap/v1", // added
+  id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+  invocationTarget: "https://example.com/foo",
+  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+}
+
+const result = RootZcap.safeParse(rootZcap)
+console.log(result.success) // true
+console.log(result.data)`,
+        expose: ["result"],
+        check: ({ result }) => ({
+          ok: result.success === true,
+          output: result.success ? result.data : result.error.issues,
+        }),
+      },
+      // Walkthrough: a delegated zcap whose proof has the wrong purpose, then fixed.
+      {
+        name: "Walkthrough 2a: a delegated zcap with a capabilityInvocation proof is rejected, with the reason",
+        description: "A delegated zcap has to carry a capabilityDelegation proof: the proof that its controller delegated it. A common mistake is to sign it with a capabilityInvocation proof instead. Everything else here is well-formed, so the one issue points at the proof and says which purpose is required.",
+        code: `import { DelegatedZcap } from "${MODULE_URL}"
+
+const delegatedZcap = {
+  "@context": [
+    "https://w3id.org/zcap/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1",
+  ],
+  id: "urn:uuid:cdc77118-6bfa-11ec-aceb-10bf48838a41",
+  parentCapability: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+  invocationTarget: "https://example.com/foo",
+  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+  expires: "2021-11-03T18:33:51Z",
+  allowedAction: ["read"],
+  proof: {
+    type: "Ed25519Signature2020",
+    created: "2021-10-27T18:33:51Z",
+    verificationMethod: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9#z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+    proofPurpose: "capabilityInvocation", // wrong purpose for a delegation
+    capabilityChain: ["urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo"],
+    proofValue: "z3t9BCQyF21MDVYmLKc9zbLreqx4wBtQnUsd5aqyoWS5FfhapRz7QjPNLcgKAornUVmJR4ZjbGpuxRFnffxX1ZjtF",
+  },
+}
+
+const result = DelegatedZcap.safeParse(delegatedZcap)
+console.log(result.success) // false
+
+const why = result.error.issues.map((issue) => \`\${issue.path.join(".")}: \${issue.message}\`)
+console.log(why)
+// [ 'proof: At least one proof MUST have a proofPurpose of "capabilityDelegation".' ]`,
+        expose: ["result", "why"],
+        check: ({ result, why }) => ({
+          ok: result.success === false && result.error.issues.some((issue) => issue.path[0] === "proof"),
+          output: why ?? result,
+        }),
+      },
+      {
+        name: "Walkthrough 2b: with a capabilityDelegation proof, the delegated zcap is valid",
+        description: "Change proofPurpose to capabilityDelegation and validate again. The delegated zcap now passes. (zcap-zod checks the data model only; verifying the signature is a job for a Data Integrity library.)",
+        code: `import { DelegatedZcap } from "${MODULE_URL}"
+
+const delegatedZcap = {
+  "@context": [
+    "https://w3id.org/zcap/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1",
+  ],
+  id: "urn:uuid:cdc77118-6bfa-11ec-aceb-10bf48838a41",
+  parentCapability: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+  invocationTarget: "https://example.com/foo",
+  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+  expires: "2021-11-03T18:33:51Z",
+  allowedAction: ["read"],
+  proof: {
+    type: "Ed25519Signature2020",
+    created: "2021-10-27T18:33:51Z",
+    verificationMethod: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9#z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+    proofPurpose: "capabilityDelegation", // fixed
+    capabilityChain: ["urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo"],
+    proofValue: "z3t9BCQyF21MDVYmLKc9zbLreqx4wBtQnUsd5aqyoWS5FfhapRz7QjPNLcgKAornUVmJR4ZjbGpuxRFnffxX1ZjtF",
+  },
+}
+
+const result = DelegatedZcap.safeParse(delegatedZcap)
+console.log(result.success) // true
+console.log(result.data.proof.proofPurpose) // "capabilityDelegation"`,
+        expose: ["result"],
+        check: ({ result }) => ({
+          ok: result.success === true && result.data.proof.proofPurpose === "capabilityDelegation",
+          output: result.success ? result.data : result.error.issues,
         }),
       },
       {
@@ -156,6 +276,7 @@ console.table(results)`,
       container.append(
         el("section", {},
           heading,
+          ...(test.description ? [el("p", { className: "description" }, test.description)] : []),
           el("div", { className: "snippet" }, el("pre", {}, el("code", {}, html)), copy),
           el("p", { className: "label" }, "Result"),
           output,

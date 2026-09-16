@@ -76,7 +76,9 @@ export const RootZcap = z.strictObject({
    * > A root zcap MUST have an `@context` field that is a string with the value
    * > `https://w3id.org/zcap/v1`.
    */
-  "@context": ZcapJsonldContextUrl,
+  "@context": z.literal(ZCAP_V1_JSONLD_CONTEXT, {
+    error: `A root zcap MUST have an @context field that is a string with the value "${ZCAP_V1_JSONLD_CONTEXT}".`,
+  }),
   /**
    * > A root zcap MUST have an `id` that is a string that expresses a URN.
    *
@@ -247,7 +249,9 @@ export const DelegatedZcap = z
      * > subsequent values identify context(s) used to define vocabulary terms
      * > used in the capability delegation proof.
      */
-    "@context": z.tuple([ZcapJsonldContextUrl]).rest(JsonLdContextEntry),
+    "@context": z.tuple([ZcapJsonldContextUrl], JsonLdContextEntry, {
+      error: `A delegated zcap MUST have an @context field with an array where the first value is "${ZCAP_V1_JSONLD_CONTEXT}".`,
+    }),
     /**
      * > A delegated zcap MUST have an `id` that is a string that expresses a
      * > URI.
