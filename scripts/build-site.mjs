@@ -2,6 +2,7 @@
 //
 //   _site/index.html        checks zcaps from ?url=, plus smoke tests
 //                           (from demo/index.html)
+//   _site/README.md         data-included (as markdown) by index.html
 //   _site/spec-examples.html
 //                           redirects old links to index.html
 //                           (from demo/spec-examples.html)
@@ -45,6 +46,7 @@ mkdirSync(out, { recursive: true })
 
 cpSync(join(root, "demo", "index.html"), join(out, "index.html"))
 cpSync(join(root, "demo", "spec-examples.html"), join(out, "spec-examples.html"))
+cpSync(join(root, "README.md"), join(out, "README.md"))
 const lib = join(out, "zcap-zod")
 cpSync(dist, lib, { recursive: true })
 for (const file of readdirSync(lib, { recursive: true })) {

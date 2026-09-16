@@ -6,6 +6,7 @@
 //
 //   /                  -> demo/index.html
 //   /zcap-zod/*        -> dist/* (zod imports rewritten, as on Pages)
+//   /README.md         -> README.md (data-included by the page)
 //   /spec-examples.html -> demo/spec-examples.html
 //   /vendor/zod/*      -> node_modules/zod/*
 //   /vendor/zcap-spec-examples/* -> node_modules/zcap-spec-examples/dist/*
@@ -46,11 +47,13 @@ const types = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".map": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
   ".ts": "text/plain; charset=utf-8",
 }
 
 function resolve(pathname) {
   if (pathname === "/" || pathname === "/index.html") return join(root, "demo", "index.html")
+  if (pathname === "/README.md") return join(root, "README.md")
   if (pathname === "/spec-examples.html") return join(root, "demo", "spec-examples.html")
   for (const [prefix, dir] of mounts) {
     if (!pathname.startsWith(prefix)) continue
