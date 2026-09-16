@@ -3,26 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>zcap-zod smoke test</title>
+  <title>zcap-zod</title>
   <link rel="icon" href="data:,">
+  <script>
+    // No ?url yet: redirect to the default, so every check is a shareable link.
+    if (!new URLSearchParams(location.search).get("url")) {
+      const next = new URL(location.href)
+      next.search = "?url=" + "https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/"
+      location.replace(next)
+    }
+  </script>
   <!--
-    No import map on purpose: each test runs its snippet exactly as shown,
-    importing zcap-zod by absolute URL, the same way a page elsewhere would.
+    Two parts:
+    1. A checker: fetch ?url=<URL>. HTML (e.g. a zcap-spec) has its examples
+       extracted with zcap-spec-examples; JSON is checked against zcap-zod.
+    2. Smoke tests and walkthroughs. No import map on purpose: each test runs
+       its snippet exactly as shown, importing zcap-zod by absolute URL, the
+       same way a page elsewhere would.
   -->
   <style>
     :root {
       color-scheme: light dark;
-      --ok: #1a7f37; --bad: #cf222e; --muted: #6e7781;
+      --ok: #1a7f37; --bad: #cf222e; --skip: #9a6700; --muted: #6e7781;
       --code-bg: #f6f8fa; --border: #d0d7de;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --ok: #3fb950; --bad: #f85149; --muted: #8b949e; --code-bg: #161b22; --border: #30363d; }
+      :root { --ok: #3fb950; --bad: #f85149; --skip: #d29922; --muted: #8b949e; --code-bg: #161b22; --border: #30363d; }
     }
     body { font: 16px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 16px; }
-    #badge { font-size: 5rem; line-height: 1; }
-    #summary { font-size: 1.25rem; font-weight: 600; }
-    [data-status="pass"] #summary { color: var(--ok); }
-    [data-status="fail"] #summary { color: var(--bad); }
+    h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+    .part { margin-top: 2.5rem; }
+    .part > h2 { font-size: 1.35rem; }
+    .status { font-size: 1.15rem; font-weight: 600; }
+    [data-status="pass"] > .status { color: var(--ok); }
+    [data-status="fail"] > .status, [data-status="error"] > .status { color: var(--bad); }
+    form { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 .5rem; }
+    form input[type="url"] { flex: 1 1 20rem; min-width: 0; font: inherit; padding: .35rem .5rem; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 8rem; font: .8rem ui-monospace, monospace; }
+    button { font: inherit; padding: .35rem .8rem; cursor: pointer; }
+    details.paste form { flex-direction: column; }
+    summary { cursor: pointer; color: var(--muted); font-size: .875rem; }
+    h2 a { color: inherit; }
+    .verdict { margin: .25rem 0; }
+    .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); } .verdict.skip { color: var(--skip); }
+    .tag { font: .75rem ui-monospace, monospace; color: var(--muted); }
+    ul.issues { margin: .25rem 0; padding-left: 1.25rem; font-size: .875rem; }
+    ul.issues code { font-size: .8rem; }
     section { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1.5rem; }
     h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
     .snippet { position: relative; }
@@ -33,15 +59,45 @@
             padding: .15rem .5rem; cursor: pointer; }
     .description { margin: 0 0 .5rem; }
     .label { color: var(--muted); font-size: .8rem; margin: .75rem 0 0; }
-    .meta { color: var(--muted); font-size: .875rem; margin-top: 2rem; }
+    .meta { color: var(--muted); font-size: .875rem; }
+    #build { margin-top: 2rem; }
   </style>
 </head>
-<body data-status="running">
-  <div id="badge" aria-hidden="true">⏳</div>
-  <p id="summary" role="status">Running…</p>
-  <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.
-    See also: <a href="spec-examples.html">check a zcap-spec's examples against zcap-zod</a>.</p>
-  <div id="tests"></div>
+<body>
+  <h1>zcap-zod</h1>
+  <p class="meta">Zod schemas for W3C Authorization Capabilities (zcaps).
+    <a href="https://github.com/gobengo/zcap-zod">Source and docs on GitHub</a></p>
+
+  <div class="part" id="checker" data-status="idle">
+    <h2>Check zcaps from a URL</h2>
+    <p class="meta">
+      If the URL returns HTML, such as a zcap-spec, its examples are extracted with
+      <a href="https://github.com/gobengo/zcap-spec-examples">zcap-spec-examples</a> and each JSON example is checked.
+      If it returns JSON (a zcap, or an array of zcaps), that is checked.
+      Each result says which zcap-zod schema it matches, or why it doesn't.
+    </p>
+    <form id="url-form" method="get">
+      <input type="url" name="url" id="url" required aria-label="URL to check"
+             placeholder="https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/">
+      <button type="submit">Check</button>
+    </form>
+    <details class="paste">
+      <summary>Or paste HTML or JSON (for URLs that don't allow cross-origin fetches)</summary>
+      <form id="paste-form" onsubmit="event.preventDefault()">
+        <textarea id="pasted" required placeholder='{ "@context": "https://w3id.org/zcap/v1", … }'></textarea>
+        <button type="submit">Check pasted content</button>
+      </form>
+    </details>
+    <p class="status" id="check-summary" role="status"></p>
+    <div id="check-results"></div>
+  </div>
+
+  <div class="part" id="smoke" data-status="running">
+    <h2>Smoke tests and walkthroughs</h2>
+    <p class="status" id="smoke-summary" role="status">⏳ Running…</p>
+    <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.</p>
+    <div id="tests"></div>
+  </div>
   <p class="meta" id="build">Build info unavailable.</p>
 
   <script type="module">
@@ -302,12 +358,10 @@ console.table(results)`,
     }
 
     const pass = results.every(Boolean)
-    document.body.dataset.status = pass ? "pass" : "fail"
-    document.getElementById("badge").textContent = pass ? "✅" : "❌"
-    document.getElementById("summary").textContent = pass
-      ? "zcap-zod works in this browser"
-      : "zcap-zod smoke test failed"
-    document.title = `${pass ? "✅" : "❌"} zcap-zod smoke test`
+    document.getElementById("smoke").dataset.status = pass ? "pass" : "fail"
+    document.getElementById("smoke-summary").textContent = pass
+      ? "✅ zcap-zod works in this browser"
+      : "❌ zcap-zod smoke test failed"
 
     try {
       const info = await (await fetch("./build-info.json")).json()
@@ -316,6 +370,213 @@ console.table(results)`,
       if (info.commitUrl) commit.href = info.commitUrl
       build.replaceChildren("Built from commit ", commit, ` at ${info.builtAt}`)
     } catch {}
+  </script>
+
+  <script type="module">
+    // Checker: fetch ?url=<URL> and check the zcaps in it.
+    const ZCAP_ZOD_URL = new URL("zcap-zod/index.js", document.baseURI).href
+    const EXTRACTOR_URL = new URL("vendor/zcap-spec-examples/examples.js", document.baseURI).href
+
+    const { Zcap, RootZcap, DelegatedZcap, ZcapInvocation } = await import(ZCAP_ZOD_URL)
+    const { extractExamplesFromHtml, parseExampleContent } = await import(EXTRACTOR_URL)
+    const schemas = { RootZcap, DelegatedZcap, ZcapInvocation }
+
+    const $ = (id) => document.getElementById(id)
+    function el(tag, props = {}, ...children) {
+      const node = Object.assign(document.createElement(tag), props)
+      node.append(...children)
+      return node
+    }
+
+    function setStatus(status, text) {
+      $("checker").dataset.status = status
+      $("check-summary").textContent = text
+    }
+
+    // Properties that only zcaps (root, delegated, or invocation) use. `id` is too common to count.
+    const ZCAP_PROPERTIES = ["@context", "invocationTarget", "parentCapability", "controller", "proof"]
+    const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
+
+    /** The schema a value's shape says it is trying to be, if its shape says. */
+    function intendedSchema(value) {
+      const purposes = [value.proof].flat().map((proof) => proof?.proofPurpose)
+      if ("parentCapability" in value || purposes.includes("capabilityDelegation")) return "DelegatedZcap"
+      if (purposes.includes("capabilityInvocation")) return "ZcapInvocation"
+      if (!("proof" in value) && ("invocationTarget" in value || typeof value["@context"] === "string")) return "RootZcap"
+    }
+
+    /** Check a parsed JSON value against zcap-zod. */
+    function checkValue(value) {
+      const matched = Object.entries(schemas)
+        .filter(([, schema]) => schema.safeParse(value).success)
+        .map(([name]) => name)
+      if (Zcap.safeParse(value).success) return { kind: "ok", matched }
+      const whyNot = Object.fromEntries(
+        Object.entries(schemas).map(([name, schema]) => [name, schema.safeParse(value).error.issues]),
+      )
+      if (!isPlainObject(value) || !ZCAP_PROPERTIES.some((property) => property in value)) {
+        const has = isPlainObject(value) ? "has none of" : `is ${Array.isArray(value) ? "an array" : value === null ? "null" : `a ${typeof value}`}, not an object with`
+        return { kind: "bad", notZcap: true, reason: `doesn't look like a zcap: it ${has} ${ZCAP_PROPERTIES.join(", ")}`, whyNot }
+      }
+      // Closest: the schema the shape points to, else the one with the fewest issues.
+      const closest = intendedSchema(value) ??
+        Object.entries(whyNot).reduce((best, entry) => (entry[1].length < best[1].length ? entry : best))[0]
+      return { kind: "bad", closest, reason: `not a valid zcap; closest is ${closest}`, whyNot }
+    }
+
+    /** Check one example extracted from HTML. */
+    function checkExample(example) {
+      let value
+      try {
+        value = parseExampleContent(example)
+      } catch (error) {
+        // TypeError: not a JSON media type (e.g. message/http). Out of scope.
+        if (error instanceof TypeError) return { kind: "skip", reason: `not JSON (${example.mediaType})` }
+        return { kind: "bad", reason: error.message }
+      }
+      return checkValue(value)
+    }
+
+    function issueList(issues) {
+      return el("ul", { className: "issues" }, ...issues.map((issue) =>
+        el("li", {}, el("code", {}, issue.path.join(".") || "(root)"), `: ${issue.message}`)))
+    }
+
+    /**
+     * items: [{ name, href?, tag, content, outcome }]
+     * openClosest: expand the issues of the schema the value came closest to.
+     */
+    function renderItems(items, { openClosest = false } = {}) {
+      const container = $("check-results")
+      container.replaceChildren()
+      const counts = { ok: 0, bad: 0, skip: 0 }
+      for (const { name, href, tag, content, outcome } of items) {
+        counts[outcome.kind]++
+        const title = el(href ? "a" : "span", {}, name)
+        if (href) title.href = href
+        const icon = { ok: "✅", bad: "❌", skip: "➖" }[outcome.kind]
+        const verdict =
+          outcome.kind === "ok" ? `valid zcap: ${outcome.matched.join(", ")}`
+          : outcome.kind === "skip" ? `skipped: ${outcome.reason}`
+          : outcome.reason ?? "not a valid zcap"
+        const section = el("section", {},
+          el("h2", {}, `${icon} `, title, " ", el("span", { className: "tag" }, tag)),
+          el("p", { className: `verdict ${outcome.kind}` }, verdict),
+        )
+        if (outcome.whyNot) {
+          // The closest schema first, and expanded when asked.
+          const entries = Object.entries(outcome.whyNot)
+            .sort(([a], [b]) => (b === outcome.closest) - (a === outcome.closest))
+          for (const [schemaName, issues] of entries) {
+            const open = openClosest && schemaName === outcome.closest
+            section.append(el("details", { open },
+              el("summary", {}, `Why not ${schemaName} (${issues.length})`), issueList(issues)))
+          }
+        }
+        section.append(el("details", {}, el("summary", {}, "Source"), el("pre", {}, el("code", {}, content))))
+        container.append(section)
+      }
+      return counts
+    }
+
+    function looksLikeJson(contentType, text) {
+      if (/[/+]json\b/i.test(contentType)) return true
+      if (/html|xml/i.test(contentType)) return false
+      return /^\s*[[{]/.test(text) // e.g. text/plain from raw file hosts, or pasted content
+    }
+
+    function checkText(text, { contentType = "", source, baseUrl } = {}) {
+      if (looksLikeJson(contentType, text)) {
+        let value
+        try {
+          value = JSON.parse(text)
+        } catch (error) {
+          $("check-results").replaceChildren()
+          setStatus("error", `⚠️ ${source} looks like JSON but isn't valid JSON: ${error.message}`)
+          return
+        }
+        const isArray = Array.isArray(value)
+        const values = isArray ? value : [value]
+        const items = values.map((item, i) => ({
+            name: isArray ? `[${i}]` : "JSON document",
+            tag: contentType.split(";")[0] || "JSON",
+            content: JSON.stringify(item, null, 2),
+            outcome: checkValue(item),
+          }))
+        const counts = renderItems(items, { openClosest: true })
+        if (!isArray) {
+          const { outcome } = items[0]
+          setStatus(counts.ok ? "pass" : "fail",
+            counts.ok ? `✅ ${source} is a valid zcap`
+            : outcome.notZcap ? `❌ ${source} doesn't look like a zcap`
+            : `❌ ${source} is not a valid zcap`)
+        } else if (values.length === 0) {
+          setStatus("error", `❓ ${source} is an empty JSON array`)
+        } else {
+          setStatus(counts.bad ? "fail" : "pass",
+            `${counts.bad ? "❌" : "✅"} ${counts.ok} of ${values.length} items in ${source} are valid zcaps`)
+        }
+        return
+      }
+
+      // Relative example URLs fall back to the fetched URL, if the spec doesn't declare its own.
+      const examples = extractExamplesFromHtml(text, baseUrl ? { fallbackBaseUrl: baseUrl } : undefined)
+      const counts = renderItems(examples.map((example) => {
+        let href
+        try {
+          if (/^https?:$/.test(new URL(example.url).protocol)) href = example.url
+        } catch {}
+        return { name: example.name, href, tag: example.mediaType, content: example.content, outcome: checkExample(example) }
+      }))
+      const json = counts.ok + counts.bad
+      const skipped = counts.skip ? `; ${counts.skip} non-JSON skipped` : ""
+      if (examples.length === 0) {
+        setStatus("error", `❓ No examples found in ${source}`)
+      } else if (counts.bad === 0) {
+        setStatus("pass", `✅ All ${json} JSON examples in ${source} are valid zcaps${skipped}`)
+      } else {
+        setStatus("fail", `❌ ${counts.ok} of ${json} JSON examples in ${source} are valid zcaps${skipped}`)
+      }
+    }
+
+    async function checkUrl(url) {
+      $("url").value = url
+      $("check-results").replaceChildren()
+      setStatus("running", `⏳ Fetching ${url}…`)
+      let response, text
+      try {
+        response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+        text = await response.text()
+      } catch (error) {
+        setStatus("error",
+          `⚠️ Couldn't fetch ${url}: ${error.message}. ` +
+          `If the server doesn't send Access-Control-Allow-Origin, paste the content below instead.`)
+        return
+      }
+      checkText(text, { contentType: response.headers.get("content-type") ?? "", source: url, baseUrl: response.url || url })
+    }
+
+    // Keep ?url= readable: only escape what would break the query string.
+    const queryFor = (url) => "?url=" + url.replace(/[%&#+ ]/g, encodeURIComponent)
+
+    $("url-form").addEventListener("submit", (event) => {
+      event.preventDefault()
+      const url = $("url").value.trim()
+      history.pushState(null, "", queryFor(url))
+      checkUrl(url)
+    })
+    $("paste-form").addEventListener("submit", (event) => {
+      event.preventDefault()
+      checkText($("pasted").value, { source: "the pasted content" })
+    })
+    addEventListener("popstate", () => {
+      const url = new URLSearchParams(location.search).get("url")
+      if (url) checkUrl(url)
+    })
+
+    const url = new URLSearchParams(location.search).get("url")
+    if (url) checkUrl(url)
   </script>
 </body>
 </html>

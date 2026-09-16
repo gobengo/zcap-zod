@@ -1,8 +1,9 @@
 // Assemble a static site that smoke-tests the built zcap-zod in a browser.
 //
-//   _site/index.html        demo page (from demo/index.html)
+//   _site/index.html        checks zcaps from ?url=, plus smoke tests
+//                           (from demo/index.html)
 //   _site/spec-examples.html
-//                           checks a zcap-spec's examples against zcap-zod
+//                           redirects old links to index.html
 //                           (from demo/spec-examples.html)
 //   _site/zcap-zod/         the tsc output (dist/), with "zod/v4" imports
 //                           rewritten to the vendored copy so any page can
