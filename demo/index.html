@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zcap-zod smoke test</title>
+  <link rel="icon" href="data:,">
+  <!--
+    The built zcap-zod imports the bare specifier "zod/v4". The site build
+    vendors zod next to it, and this import map points the browser at it, so
+    the page tests exactly the dist/ produced for this commit.
+  -->
+  <script type="importmap">
+    { "imports": { "zod/v4": "./vendor/zod/v4/index.js" } }
+  </script>
+  <style>
+    :root { color-scheme: light dark; --ok: #1a7f37; --bad: #cf222e; --muted: #6e7781; }
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 16px; }
+    #badge { font-size: 5rem; line-height: 1; }
+    #summary { font-size: 1.25rem; font-weight: 600; }
+    [data-status="pass"] #summary { color: var(--ok); }
+    [data-status="fail"] #summary { color: var(--bad); }
+    ul { padding-left: 0; list-style: none; }
+    li { margin: .5rem 0; }
+    li pre { margin: .25rem 0 0 1.75rem; white-space: pre-wrap; font-size: .8rem; color: var(--muted); }
+    .meta { color: var(--muted); font-size: .875rem; }
+    code { font-size: .9em; }
+  </style>
+</head>
+<body data-status="running">
+  <div id="badge" aria-hidden="true">⏳</div>
+  <p id="summary" role="status">Running…</p>
+  <ul id="checks"></ul>
+  <p class="meta" id="build">Build info unavailable.</p>
+
+  <script type="module">
+    const checks = document.getElementById("checks")
+    const results = []
+
+    function record(name, ok, detail = "") {
+      results.push({ name, ok, detail })
+      const li = document.createElement("li")
+      li.textContent = `${ok ? "✅" : "❌"} ${name}`
+      if (detail) {
+        const pre = document.createElement("pre")
+        pre.textContent = detail
+        li.append(pre)
+      }
+      checks.append(li)
+    }
+
+    const rootZcap = {
+      "@context": "https://w3id.org/zcap/v1",
+      id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+      invocationTarget: "https://example.com/foo",
+      controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+    }
+    const notAZcap = { hello: "world", id: 42 }
+
+    try {
+      const lib = await import("./zcap-zod/index.js")
+      record("Imported zcap-zod", true, `exports: ${Object.keys(lib).sort().join(", ")}`)
+
+      const good = lib.Zcap.safeParse(rootZcap)
+      record(
+        "Parsed a valid root zcap",
+        good.success,
+        good.success ? JSON.stringify(good.data, null, 2) : JSON.stringify(good.error.issues, null, 2),
+      )
+
+      const bad = lib.Zcap.safeParse(notAZcap)
+      record(
+        "Rejected a non-zcap",
+        !bad.success,
+        bad.success
+          ? `Unexpectedly accepted: ${JSON.stringify(notAZcap)}`
+          : `Errored as expected (${bad.error.issues.length} issue(s))`,
+      )
+    } catch (error) {
+      record("Imported zcap-zod", false, String(error?.stack ?? error))
+    }
+
+    const pass = results.length === 3 && results.every((r) => r.ok)
+    document.body.dataset.status = pass ? "pass" : "fail"
+    document.getElementById("badge").textContent = pass ? "✅" : "❌"
+    document.getElementById("summary").textContent = pass
+      ? "zcap-zod works in this browser"
+      : "zcap-zod smoke test failed"
+    document.title = `${pass ? "✅" : "❌"} zcap-zod smoke test`
+
+    try {
+      const info = await (await fetch("./build-info.json")).json()
+      const el = document.getElementById("build")
+      el.textContent = "Built from commit "
+      const code = document.createElement(info.commitUrl ? "a" : "code")
+      code.textContent = info.commit.slice(0, 12)
+      if (info.commitUrl) code.href = info.commitUrl
+      el.append(code, ` at ${info.builtAt}`)
+    } catch {}
+  </script>
+</body>
+</html>

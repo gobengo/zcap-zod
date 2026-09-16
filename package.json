@@ -12,17 +12,20 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:site": "npm run build && node scripts/build-site.mjs",
+    "dev": "node scripts/dev.mjs",
     "clean": "rm -rf dist",
     "prepack": "npm run clean && npm run build",
     "test": "node --test",
     "fixture:update": "npx --yes zcap-spec-examples@^0.1.0 --url=https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/ --format=ndjson > etc/zcap-spec-examples.ndjson"
   },
-  "dependencies": {
-    "zod": "^4.4.3"
+  "peerDependencies": {
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
   },
   "files": [
     "dist",
