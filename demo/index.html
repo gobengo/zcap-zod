@@ -23,7 +23,17 @@
       edDraftURI: null,
       lint: { "no-headingless-sections": false },
       maxTocLevel: 2,
+      // Each smoke test and walkthrough is its own top-level section. The module
+      // script below renders their skeletons; wait for it so ReSpec numbers them
+      // and lists them in the table of contents. (Give up after a few seconds
+      // rather than hang if that script fails.)
+      preProcess: [() => Promise.race([
+        smokeSectionsRendered,
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ])],
     }
+    let renderedSmokeSections
+    const smokeSectionsRendered = new Promise((resolve) => (renderedSmokeSections = resolve))
 
     // README.md is written for GitHub and npm. Adapt it for this page.
     const README_BASE = "https://github.com/gobengo/zcap-zod/blob/main/"
@@ -33,7 +43,29 @@
     }
     /** Everything from the first "## " heading on. */
     function readmeBody(utils, content) {
-      return readmeLinks(content.slice(content.search(/^## /m)))
+      return readmeLinks(readmeAbsoluteImports(content.slice(content.search(/^## /m))))
+    }
+    /**
+     * The README's Usage examples import "zcap-zod" (and "zod/v4") by bare
+     * specifier, for Node.js and bundlers. On this page, show the absolute URLs
+     * this site serves instead, so the snippets work pasted into any web page:
+     * https://gobengo.github.io/zcap-zod/zcap-zod/index.js once deployed. zod is
+     * the copy zcap-zod itself imports, so both share one instance.
+     */
+    function readmeAbsoluteImports(markdown) {
+      const url = (path) => new URL(path, document.baseURI).href
+      const specifiers = {
+        "zcap-zod": url("zcap-zod/index.js"),
+        "zod": url("vendor/zod/index.js"),
+        "zod/v4": url("vendor/zod/v4/index.js"),
+      }
+      const start = markdown.search(/^## Usage$/m)
+      if (start === -1) return markdown
+      const next = markdown.slice(start + 1).search(/^## /m)
+      const end = next === -1 ? markdown.length : start + 1 + next
+      const usage = markdown.slice(start, end).replace(/(\bfrom\s*)(["'])(zcap-zod|zod|zod\/v4)\2/g,
+        (_, from, quote, specifier) => `${from}${quote}${specifiers[specifier]}${quote}`)
+      return markdown.slice(0, start) + usage + markdown.slice(end)
     }
     /** Relative links (e.g. docs/adr/…) point into the repo, not this site. */
     function readmeLinks(markdown) {
@@ -54,7 +86,7 @@
     Two parts:
     1. A checker: fetch ?url=<URL>. HTML (e.g. a zcap-spec) has its examples
        extracted with zcap-spec-examples; JSON is checked against zcap-zod.
-    2. Smoke tests and walkthroughs. No import map on purpose: each test runs
+    2. Smoke tests and walkthroughs, one section each. No import map on purpose: each test runs
        its snippet exactly as shown, importing zcap-zod by absolute URL, the
        same way a page elsewhere would.
   -->
@@ -68,6 +100,7 @@
       :root { --ok: #3fb950; --bad: #f85149; --skip: #d29922; --muted: #8b949e; --code-bg: #161b22; --border: #30363d; }
     }
     .status { font-size: 1.15rem; font-weight: 600; }
+    [data-status="running"] > .status { color: var(--muted); }
     [data-status="pass"] > .status { color: var(--ok); }
     [data-status="fail"] > .status, [data-status="error"] > .status { color: var(--bad); }
     form { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 .5rem; }
@@ -88,7 +121,7 @@
     .result { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1.5rem; }
     .result h3 { font-size: 1.05rem; margin: 0 0 .5rem; }
     .snippet { position: relative; }
-    .result pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    .result pre, .smoke-test pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
           padding: .75rem; overflow-x: auto; font-size: .8rem; margin: .5rem 0; }
     pre.output { max-height: 16rem; overflow: auto; }
     .copy { position: absolute; top: .4rem; right: .4rem; font: inherit; font-size: .75rem;
@@ -107,6 +140,11 @@
     <h2>About this page</h2>
     <p>This page is the documentation for the <a href="https://github.com/gobengo/zcap-zod">zcap-zod</a> library, not a specification.
       It checks zcaps in your browser, and smoke-tests the build it serves.</p>
+    <div id="smoke" data-status="running">
+      <p class="status" id="smoke-summary" role="status">⏳ Running smoke tests…</p>
+      <p class="meta">The sections after the README are smoke tests and walkthroughs.
+        Each snippet is the exact code that ran in your browser. Paste it into any HTML file to try it.</p>
+    </div>
     <p class="meta" id="build">Build info unavailable.</p>
   </section>
   <!-- ReSpec's own copyright line credits the W3C; this one replaces it. -->
@@ -148,17 +186,10 @@
 
   <div data-include="README.md" data-include-format="markdown" data-include-replace data-oninclude="readmeBody"></div>
 
-  <section class="appendix" id="smoke" data-status="running">
-    <h2 id="smoke-tests-and-walkthroughs">Smoke tests and walkthroughs</h2>
-    <p class="status" id="smoke-summary" role="status">⏳ Running…</p>
-    <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.</p>
-    <div id="tests"></div>
-  </section>
+  <!-- Replaced by one <section> per smoke test / walkthrough. -->
+  <div id="tests"></div>
 
   <script type="module">
-    // ReSpec restructures the document; render into it once it's done.
-    await document.respec?.ready
-
     // Absolute URL of the zcap-zod build served next to this page.
     const MODULE_URL = new URL("zcap-zod/index.js", document.baseURI).href
 
@@ -364,7 +395,6 @@ console.table(results)`,
       },
     ]
 
-    const container = document.getElementById("tests")
     const results = []
 
     function el(tag, props = {}, ...children) {
@@ -378,20 +408,11 @@ console.table(results)`,
       return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
     }
 
-    /**
-     * The headings are rendered by script, after the browser has already looked
-     * for the #fragment, so scroll to it once its heading exists.
-     */
-    function scrollToHash() {
-      const id = decodeURIComponent(location.hash.slice(1))
-      if (id) document.getElementById(id)?.scrollIntoView()
-    }
-
-    for (const test of tests) {
+    // First render every test's section, so ReSpec can number them and put them
+    // in the table of contents (see preProcess in respecConfig)…
+    const rendered = tests.map((test) => {
       const html = `<script type="module">\n${test.code}\n<\/script>`
-      const id = slug(test.name)
-      const status = el("span", {}, "⏳ ")
-      const heading = el("h3", { id }, status, el("a", { className: "anchor", href: `#${id}` }, test.name))
+      const status = el("p", { className: "status", role: "status" }, "⏳ Running…")
       const copy = el("button", { className: "copy", type: "button" }, "Copy")
       copy.addEventListener("click", async () => {
         try {
@@ -402,18 +423,25 @@ console.table(results)`,
         }
         setTimeout(() => (copy.textContent = "Copy"), 1500)
       })
-      const output = el("pre", { className: "output" }, "…")
-      container.append(
-        el("div", { className: "result" },
-          heading,
-          ...(test.description ? [el("p", { className: "description" }, test.description)] : []),
-          el("div", { className: "snippet" }, el("pre", {}, el("code", {}, html)), copy),
-          el("p", { className: "label" }, "Result"),
-          output,
-        ),
+      const output = el("pre", { className: "output nohighlight" }, "…")
+      const section = el("section", { className: "smoke-test" },
+        el("h2", { id: slug(test.name) }, test.name),
+        status,
+        ...(test.description ? [el("p", { className: "description" }, test.description)] : []),
+        el("div", { className: "snippet" }, el("pre", {}, el("code", { className: "html" }, html)), copy),
+        el("p", { className: "label" }, "Result"),
+        output,
       )
-      if (location.hash === `#${id}`) scrollToHash()
+      section.dataset.status = "running"
+      return { test, section, status, output }
+    })
+    document.getElementById("tests").replaceWith(...rendered.map(({ section }) => section))
+    renderedSmokeSections?.()
 
+    // …then run them once ReSpec is done rearranging the page.
+    await document.respec?.ready
+
+    for (const { test, section, status, output } of rendered) {
       let ok = false
       try {
         const source = `${test.code}\nexport { ${test.expose.join(", ")} }\n`
@@ -428,7 +456,8 @@ console.table(results)`,
       } catch (error) {
         output.textContent = String(error?.stack ?? error)
       }
-      status.textContent = `${ok ? "✅" : "❌"} `
+      section.dataset.status = ok ? "pass" : "fail"
+      status.textContent = ok ? "✅ Passed in this browser" : "❌ Failed in this browser"
       results.push(ok)
     }
 
@@ -541,11 +570,41 @@ console.table(results)`,
      * items: [{ name, href?, tag, content, outcome }]
      * openClosest: expand the issues of the schema the value came closest to.
      */
+    /** The checker's section number from ReSpec ("1"), if ReSpec numbered it. */
+    const checkerSecno = () =>
+      document.querySelector("#check-zcaps-from-a-url .secno")?.textContent.trim().replace(/\.$/, "")
+
+    /**
+     * List the results under the checker's entry in ReSpec's table of contents,
+     * like the subsections ReSpec numbers itself. They render after ReSpec has
+     * run, so it can't do this for them.
+     */
+    function setTocEntries(entries) {
+      const tocLine = document.querySelector('#toc a[href="#check-zcaps-from-a-url"]')?.closest("li")
+      if (!tocLine) return
+      tocLine.querySelector(":scope > ol.toc")?.remove()
+      if (!entries.length) return
+      tocLine.append(el("ol", { className: "toc" }, ...entries.map(({ id, secno, text }) =>
+        el("li", { className: "tocline" },
+          el("a", { className: "tocxref", href: `#${id}` }, el("bdi", { className: "secno" }, `${secno} `), text)))))
+    }
+
+    function clearResults() {
+      $("check-results").replaceChildren()
+      setTocEntries([])
+    }
+
+    /** A URL fragment for a result, e.g. (2, "Example 2: A root zcap") -> "check-2-example-2-a-root-zcap". */
+    const resultId = (n, name) =>
+      `check-${n}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.replace(/-+$/, "")
+
     function renderItems(items, { openClosest = false } = {}) {
       const container = $("check-results")
-      container.replaceChildren()
+      clearResults()
       const counts = { ok: 0, bad: 0, skip: 0 }
-      for (const { name, href, tag, content, outcome } of items) {
+      const tocEntries = []
+      const parentSecno = checkerSecno()
+      for (const [i, { name, href, tag, content, outcome }] of items.entries()) {
         counts[outcome.kind]++
         const title = el(href ? "a" : "span", {}, name)
         if (href) title.href = href
@@ -554,10 +613,17 @@ console.table(results)`,
           outcome.kind === "ok" ? `valid zcap: ${outcome.matched.join(", ")}`
           : outcome.kind === "skip" ? `skipped: ${outcome.reason}`
           : outcome.reason ?? "not a valid zcap"
-        const section = el("div", { className: "result" },
-          el("h3", {}, `${icon} `, title, " ", el("span", { className: "tag" }, tag)),
+        const id = resultId(i + 1, name)
+        const secno = parentSecno ? `${parentSecno}.${i + 1}` : ""
+        const heading = el("h3", { id },
+          ...(secno ? [el("bdi", { className: "secno" }, `${secno} `)] : []),
+          `${icon} `, title, " ", el("span", { className: "tag" }, tag))
+        const section = el("section", { className: "result" },
+          el("div", { className: "header-wrapper" }, heading,
+            el("a", { className: "self-link", href: `#${id}`, ariaLabel: `Permalink for Section ${secno}` })),
           el("p", { className: `verdict ${outcome.kind}` }, verdict),
         )
+        if (secno) tocEntries.push({ id, secno, text: `${icon} ${name}` })
         if (outcome.whyNot) {
           // The closest schema first, and expanded when asked.
           const entries = Object.entries(outcome.whyNot)
@@ -571,6 +637,7 @@ console.table(results)`,
         section.append(el("details", {}, el("summary", {}, "Source"), el("pre", {}, el("code", {}, content))))
         container.append(section)
       }
+      setTocEntries(tocEntries)
       return counts
     }
 
@@ -586,7 +653,7 @@ console.table(results)`,
         try {
           value = JSON.parse(text)
         } catch (error) {
-          $("check-results").replaceChildren()
+          clearResults()
           setStatus("error", `⚠️ ${source} looks like JSON but isn't valid JSON: ${error.message}`)
           return
         }
@@ -670,7 +737,7 @@ console.table(results)`,
     async function checkUrl(url, { redirects = 0 } = {}) {
       checkedSearch = location.search
       $("url").value = url
-      $("check-results").replaceChildren()
+      clearResults()
       setStatus("running", `⏳ Fetching ${url}…`)
       let response, text
       try {
