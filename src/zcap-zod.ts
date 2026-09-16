@@ -307,17 +307,22 @@ export const DelegatedZcap = z
      */
     controller: Controller,
     /**
-     * > A [delegated] zcap MUST have an `invocationTarget` that is a string that
-     * > expresses a URI.
+     * Optional, because no normative statement requires it of a delegated zcap.
+     * The Delegated Capability section says:
      *
-     * Note: the spec text in the Delegated Capability section reads "A root zcap
-     * MUST have an `invocationTarget`", which appears to be an editorial slip --
-     * the surrounding prose (invocation target attenuation against the parent's
-     * target) and Example 7 both treat this as a delegated zcap property.
+     * > A root zcap MUST have an `invocationTarget` that is a string that
+     * > expresses a URI. [...] A verifier MUST ensure that the
+     * > `invocationTarget` either matches the `invocationTarget` in the parent
+     * > capability or [...] has the `invocationTarget` from the parent
+     * > capability as a prefix.
      *
-     * @see https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/#delegated-capability
+     * That reads like an editorial slip for "A delegated zcap MUST", and it has
+     * been reported to the zcap-spec. Until the spec says so, zcap-zod does not
+     * require it; when present, it must still be a string that expresses a URI.
+     *
+     * @see https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.3/#delegated-capability
      */
-    invocationTarget: URI,
+    invocationTarget: URI.optional(),
     /**
      * > A delegated zcap MUST have an `expires` field that expresses an XSD
      * > date-time

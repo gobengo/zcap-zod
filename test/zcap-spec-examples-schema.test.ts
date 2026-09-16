@@ -26,8 +26,10 @@ type Expectation =
  * Examples 1-5 are the informative "Zcap by Example" narrative. Their proofs
  * were modernised for v0.4 (they are Data Integrity proofs now), but the
  * capabilities themselves still lag the normative data model: none of them
- * carry the `expires` and `invocationTarget` that the Delegated Capability
- * section says a delegated zcap MUST have. They are expected NOT to parse.
+ * carry the `expires` that the Delegated Capability section says a delegated
+ * zcap MUST have. They are expected NOT to parse. (They also lack
+ * `invocationTarget`, which zcap-zod does not require of delegated zcaps; see
+ * `DelegatedZcap` in src/zcap-zod.ts.)
  *
  * @see https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/
  */
@@ -38,7 +40,7 @@ const expectations: Record<string, Expectation> = {
   },
   "example-2": {
     kind: "non-conformant",
-    why: "narrative delegation: no invocationTarget, no expires",
+    why: "narrative delegation: no expires",
   },
   "example-3": {
     kind: "non-conformant",
@@ -46,11 +48,11 @@ const expectations: Record<string, Expectation> = {
   },
   "example-4": {
     kind: "non-conformant",
-    why: "narrative delegation with a caveat: no invocationTarget, no expires",
+    why: "narrative delegation with a caveat: no expires",
   },
   "example-5": {
     kind: "non-conformant",
-    why: "narrative delegation with a caveat and an embedded capabilityChain: no invocationTarget, no expires",
+    why: "narrative delegation with a caveat and an embedded capabilityChain: no expires",
   },
   "example-6": { kind: "zcap", schema: "root", why: "normative root zcap" },
   "example-7": {

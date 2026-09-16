@@ -424,6 +424,20 @@ console.table(results)`,
       return { kind: "bad", closest, reason: `not a valid zcap; closest is ${closest}`, whyNot }
     }
 
+    const ZCAP_CONTEXT = "https://w3id.org/zcap/v1"
+
+    /**
+     * Specs show other kinds of documents next to zcaps (e.g. the controller
+     * document a chain is rooted at). An example that fails every schema, has an
+     * @context without the zcap context, and has no zcap proof or parent is
+     * taken to be one of those, so it is skipped rather than failed.
+     */
+    function otherKindOfDocument(value) {
+      if (!isPlainObject(value) || !("@context" in value)) return false
+      if ([value["@context"]].flat().includes(ZCAP_CONTEXT)) return false
+      return intendedSchema(value) !== "DelegatedZcap" && intendedSchema(value) !== "ZcapInvocation"
+    }
+
     /** Check one example extracted from HTML. */
     function checkExample(example) {
       let value
@@ -434,7 +448,11 @@ console.table(results)`,
         if (error instanceof TypeError) return { kind: "skip", reason: `not JSON (${example.mediaType})` }
         return { kind: "bad", reason: error.message }
       }
-      return checkValue(value)
+      const outcome = checkValue(value)
+      if (outcome.kind === "bad" && otherKindOfDocument(value)) {
+        return { ...outcome, kind: "skip", reason: `not a zcap: its @context doesn't include ${ZCAP_CONTEXT}` }
+      }
+      return outcome
     }
 
     function issueList(issues) {
@@ -529,7 +547,7 @@ console.table(results)`,
         return { name: example.name, href, tag: example.mediaType, content: example.content, outcome: checkExample(example) }
       }))
       const json = counts.ok + counts.bad
-      const skipped = counts.skip ? `; ${counts.skip} non-JSON skipped` : ""
+      const skipped = counts.skip ? `; ${counts.skip} skipped (not JSON, or not a zcap)` : ""
       if (examples.length === 0) {
         setStatus("error", `❓ No examples found in ${source}`)
       } else if (counts.bad === 0) {

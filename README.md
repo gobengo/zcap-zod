@@ -117,7 +117,7 @@ The published package contains compiled JavaScript and type declarations in `dis
 | Export | Parses |
 | --- | --- |
 | `RootZcap` | A [root zcap](https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/#root-capability): `@context`, `id` (a URN), `invocationTarget`, `controller`, and nothing else. |
-| `DelegatedZcap` | A [delegated zcap](https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/#delegated-capability), including at least one conforming `capabilityDelegation` proof. |
+| `DelegatedZcap` | A [delegated zcap](https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/#delegated-capability), including at least one conforming `capabilityDelegation` proof. `invocationTarget` is optional: the spec's only statement requiring it says "A root zcap MUST" in the delegated section, likely a typo that has been reported upstream. |
 | `ZcapInvocation` | An [invocation](https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/#invocation): any linked data object carrying a conforming `capabilityInvocation` proof. |
 | `Zcap` | A union of the three above — any conforming zcap document. |
 | `CapabilityChain` | The `capabilityChain` array of a delegation proof. |

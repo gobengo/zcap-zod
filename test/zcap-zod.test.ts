@@ -147,7 +147,15 @@ await test("delegated zcap", async (t) => {
     assertAccepts(Zcap, validDelegated, "via the Zcap union");
   });
 
-  for (const required of ["id", "parentCapability", "controller", "invocationTarget", "expires", "proof"]) {
+  // The spec's Delegated Capability section says "A root zcap MUST have an
+  // `invocationTarget`" -- likely a slip for "delegated", but not normative
+  // as written, so it is not required.
+  await t.test("does not require invocationTarget, but checks it when present", () => {
+    assertAccepts(DelegatedZcap, withChanges(validDelegated, { invocationTarget: undefined }), "no normative MUST for delegated zcaps");
+    assertRejects(DelegatedZcap, withChanges(validDelegated, { invocationTarget: "not a uri" }), "invocationTarget MUST express a URI");
+  });
+
+  for (const required of ["id", "parentCapability", "controller", "expires", "proof"]) {
     await t.test(`requires ${required}`, () => {
       assertRejects(DelegatedZcap, withChanges(validDelegated, { [required]: undefined }), `${required} is REQUIRED`);
     });
