@@ -4,15 +4,39 @@
 
 Parse and validate root zcaps, delegated zcaps, and capability invocations. Every constraint in the schemas is annotated with the normative statement from the spec that it encodes.
 
+Paste this into any `.html` file. It needs no install and no build:
+
+```html
+<script type="module">
+  import { RootZcap } from "https://gobengo.github.io/zcap-zod/zcap-zod/index.js"
+
+  const root = RootZcap.parse({
+    "@context": "https://w3id.org/zcap/v1",
+    id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+    controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+    invocationTarget: "https://example.com/foo",
+  })
+  console.log(root)
+</script>
+```
+
+That URL serves the build of the latest commit on `main`, with `zod` included. The [demo page](https://gobengo.github.io/zcap-zod/) runs smoke tests against the same build.
+
+**With Node.js, a bundler, or an import map**, import from `"zcap-zod"` instead:
+
 ```js
 import { RootZcap } from "zcap-zod"
+```
 
-RootZcap.parse({
-  "@context": "https://w3id.org/zcap/v1",
-  id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
-  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
-  invocationTarget: "https://example.com/foo",
-})
+In Node.js or a bundler, [install the package](#install) first. In a browser, map the name with an import map:
+
+```html
+<script type="importmap">
+  { "imports": { "zcap-zod": "https://gobengo.github.io/zcap-zod/zcap-zod/index.js" } }
+</script>
+<script type="module">
+  import { RootZcap } from "zcap-zod"
+</script>
 ```
 
 ## What it does and does not check
@@ -249,6 +273,18 @@ const VerifierChain = CapabilityChain.refine(
 
 ## Use it in a browser, with no bundler
 
+### From GitHub Pages
+
+Every push to `main` deploys a browser-ready build to GitHub Pages:
+
+```js
+import { Zcap } from "https://gobengo.github.io/zcap-zod/zcap-zod/index.js"
+```
+
+This build is the `tsc` output from `dist/`, plus a copy of `zod` next to it, so the one import is all a page needs. It always tracks `main`. For a pinned version, use esm.sh (below). Why it's built this way is recorded in [ADR-0001](docs/adr/0001-browser-importable-build-on-github-pages.md).
+
+### From esm.sh
+
 [esm.sh](https://esm.sh) transpiles the TypeScript source straight from GitHub, so a plain HTML page can import the schemas over a CDN — no install and no build of your own:
 
 ```js
@@ -267,7 +303,7 @@ The repository has to be public on GitHub for this to work, and esm.sh caches ag
 
 ### Copy-paste snippet
 
-Paste this into [jsbin](https://jsbin.com), [CodePen](https://codepen.io), or any `.html` file and open it:
+Paste this into [jsbin](https://jsbin.com), [CodePen](https://codepen.io), or any `.html` file and open it. To pin a version, swap the import URL for an esm.sh one:
 
 ```html
 <!doctype html>
@@ -275,7 +311,7 @@ Paste this into [jsbin](https://jsbin.com), [CodePen](https://codepen.io), or an
 <title>zcap-zod in the browser</title>
 <pre id="out">running…</pre>
 <script type="module">
-  import { RootZcap, Zcap, rootZcapIdFor } from "https://esm.sh/gh/gobengo/zcap-zod/src/index.ts"
+  import { RootZcap, Zcap, rootZcapIdFor } from "https://gobengo.github.io/zcap-zod/zcap-zod/index.js"
 
   const out = document.getElementById("out")
   const log = (...args) => { out.textContent += args.join(" ") + "\n" }
@@ -331,6 +367,8 @@ By default esm.sh bundles its own copy of `zod`. If your page already imports `z
 npm install
 npm test     # node --test, against the TypeScript source
 npm run build  # tsc -> dist/*.js + dist/*.d.ts
+npm run dev    # tsc --watch + the demo page at http://localhost:8080/
+npm run build:site  # build + assemble _site/, what GitHub Pages deploys
 ```
 
 Tests run on `node --test` against the TypeScript source directly (Node 22.6+), so most work needs no build.
