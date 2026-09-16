@@ -45,6 +45,9 @@
     details.paste form { flex-direction: column; }
     summary { cursor: pointer; color: var(--muted); font-size: .875rem; }
     h2 a { color: inherit; }
+    h2 a.anchor { text-decoration: none; }
+    h2 a.anchor:hover, h2 a.anchor:focus-visible { text-decoration: underline; }
+    [id] { scroll-margin-top: 1rem; }
     .verdict { margin: .25rem 0; }
     .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); } .verdict.skip { color: var(--skip); }
     .tag { font: .75rem ui-monospace, monospace; color: var(--muted); }
@@ -70,7 +73,7 @@
     <a href="https://github.com/gobengo/zcap-zod">Source and docs on GitHub</a></p>
 
   <div class="part" id="checker" data-status="idle">
-    <h2>Check zcaps from a URL</h2>
+    <h2 id="check-zcaps-from-a-url"><a class="anchor" href="#check-zcaps-from-a-url">Check zcaps from a URL</a></h2>
     <p class="meta">
       If the URL returns HTML, such as a zcap-spec, its examples are extracted with
       <a href="https://github.com/gobengo/zcap-spec-examples">zcap-spec-examples</a> and each JSON example is checked.
@@ -94,7 +97,7 @@
   </div>
 
   <div class="part" id="smoke" data-status="running">
-    <h2>Smoke tests and walkthroughs</h2>
+    <h2 id="smoke-tests-and-walkthroughs"><a class="anchor" href="#smoke-tests-and-walkthroughs">Smoke tests and walkthroughs</a></h2>
     <p class="status" id="smoke-summary" role="status">⏳ Running…</p>
     <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.</p>
     <div id="tests"></div>
@@ -316,9 +319,25 @@ console.table(results)`,
       return node
     }
 
+    /** A URL fragment for a heading, e.g. "Import zcap-zod" -> "import-zcap-zod". */
+    function slug(text) {
+      return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    }
+
+    /**
+     * The headings are rendered by script, after the browser has already looked
+     * for the #fragment, so scroll to it once its heading exists.
+     */
+    function scrollToHash() {
+      const id = decodeURIComponent(location.hash.slice(1))
+      if (id) document.getElementById(id)?.scrollIntoView()
+    }
+
     for (const test of tests) {
       const html = `<script type="module">\n${test.code}\n<\/script>`
-      const heading = el("h2", {}, `⏳ ${test.name}`)
+      const id = slug(test.name)
+      const status = el("span", {}, "⏳ ")
+      const heading = el("h2", { id }, status, el("a", { className: "anchor", href: `#${id}` }, test.name))
       const copy = el("button", { className: "copy", type: "button" }, "Copy")
       copy.addEventListener("click", async () => {
         try {
@@ -339,6 +358,7 @@ console.table(results)`,
           output,
         ),
       )
+      if (location.hash === `#${id}`) scrollToHash()
 
       let ok = false
       try {
@@ -354,7 +374,7 @@ console.table(results)`,
       } catch (error) {
         output.textContent = String(error?.stack ?? error)
       }
-      heading.textContent = `${ok ? "✅" : "❌"} ${test.name}`
+      status.textContent = `${ok ? "✅" : "❌"} `
       results.push(ok)
     }
 
@@ -579,7 +599,12 @@ console.table(results)`,
       }
     }
 
+    // The ?url= query last checked. Following a #heading link fires popstate
+    // too; that shouldn't re-fetch and re-render the results.
+    let checkedSearch
+
     async function checkUrl(url, { redirects = 0 } = {}) {
+      checkedSearch = location.search
       $("url").value = url
       $("check-results").replaceChildren()
       setStatus("running", `⏳ Fetching ${url}…`)
@@ -601,7 +626,7 @@ console.table(results)`,
       if (!looksLikeJson(contentType, text) && extractExamplesFromHtml(text).length === 0) {
         const target = findRedirect(text, baseUrl)
         if (target && target !== url && target !== baseUrl && redirects < 3) {
-          history.replaceState(null, "", queryFor(target))
+          history.replaceState(null, "", queryFor(target) + location.hash)
           return checkUrl(target, { redirects: redirects + 1 })
         }
       }
@@ -622,12 +647,23 @@ console.table(results)`,
       checkText($("pasted").value, { source: "the pasted content" })
     })
     addEventListener("popstate", () => {
+      if (location.search === checkedSearch) return
       const url = new URLSearchParams(location.search).get("url")
       if (url) checkUrl(url)
     })
 
     const url = new URLSearchParams(location.search).get("url")
-    if (url) checkUrl(url)
+    if (url) {
+      // Results above the #heading linked to shift it down as they render, so
+      // scroll to it again once they're in, unless the reader has moved on.
+      let moved = false
+      for (const type of ["wheel", "touchstart", "keydown", "mousedown"]) {
+        addEventListener(type, () => (moved = true), { once: true, passive: true })
+      }
+      await checkUrl(url)
+      const id = decodeURIComponent(location.hash.slice(1))
+      if (id && !moved) document.getElementById(id)?.scrollIntoView()
+    }
   </script>
 </body>
 </html>
