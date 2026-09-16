@@ -38,7 +38,8 @@
 <body data-status="running">
   <div id="badge" aria-hidden="true">⏳</div>
   <p id="summary" role="status">Running…</p>
-  <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.</p>
+  <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.
+    See also: <a href="spec-examples.html">check a zcap-spec's examples against zcap-zod</a>.</p>
   <div id="tests"></div>
   <p class="meta" id="build">Build info unavailable.</p>
 
@@ -88,6 +89,43 @@ console.log(result.error.issues)`,
         check: ({ result }) => ({
           ok: result.success === false,
           output: result.success ? { unexpectedlyAccepted: result.data } : result.error.issues,
+        }),
+      },
+      {
+        // Needs the network: fetches the spec and the extractor from other origins.
+        // Some spec examples are known not to conform (see
+        // test/zcap-spec-examples-schema.test.ts), so this passes when every
+        // example was checked and at least one validated; the output lists each.
+        name: "Check every example in the zcap-spec",
+        code: `import * as zcapZod from "${MODULE_URL}"
+import { extractExamples, parseExampleContent } from "https://gobengo.github.io/zcap-spec-examples/lib/examples.js"
+
+const schemas = ["RootZcap", "DelegatedZcap", "ZcapInvocation"]
+const response = await fetch("https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/")
+const results = []
+for await (const example of extractExamples(response)) {
+  let value
+  try {
+    value = parseExampleContent(example)
+  } catch {
+    results.push({ name: example.name, mediaType: example.mediaType, skipped: "not JSON" })
+    continue
+  }
+  const result = zcapZod.Zcap.safeParse(value)
+  results.push({
+    name: example.name,
+    mediaType: example.mediaType,
+    value,
+    valid: result.success,
+    schema: schemas.find((schema) => zcapZod[schema].safeParse(value).success),
+    issues: result.success ? undefined : result.error.issues,
+  })
+}
+console.table(results)`,
+        expose: ["results"],
+        check: ({ results }) => ({
+          ok: results.length > 0 && results.some((result) => result.valid),
+          output: results,
         }),
       },
     ]

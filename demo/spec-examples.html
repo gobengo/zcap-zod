@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zcap-spec examples vs zcap-zod</title>
+  <link rel="icon" href="data:,">
+  <!--
+    Fetches a zcap-spec, extracts its examples with zcap-spec-examples, and
+    checks every JSON example against zcap-zod. Both libraries are imported by
+    absolute URL from this site, as in index.html.
+
+    ?url=<spec URL> picks the spec, so a result can be shared as a link.
+  -->
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ok: #1a7f37; --bad: #cf222e; --skip: #9a6700; --muted: #6e7781;
+      --code-bg: #f6f8fa; --border: #d0d7de;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ok: #3fb950; --bad: #f85149; --skip: #d29922; --muted: #8b949e; --code-bg: #161b22; --border: #30363d; }
+    }
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 16px; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    #badge { font-size: 4rem; line-height: 1; margin-top: 1rem; }
+    #summary { font-size: 1.25rem; font-weight: 600; }
+    [data-status="pass"] #summary { color: var(--ok); }
+    [data-status="fail"] #summary, [data-status="error"] #summary { color: var(--bad); }
+    form { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 .5rem; }
+    form input[type="url"] { flex: 1 1 20rem; min-width: 0; font: inherit; padding: .35rem .5rem; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 8rem; font: .8rem ui-monospace, monospace; }
+    button { font: inherit; padding: .35rem .8rem; cursor: pointer; }
+    details.paste { margin: 0 0 1rem; }
+    details.paste form { flex-direction: column; }
+    section { border-top: 1px solid var(--border); padding-top: .75rem; margin-top: 1rem; }
+    h2 { font-size: 1.05rem; margin: 0; }
+    h2 a { color: inherit; }
+    .verdict { margin: .25rem 0; }
+    .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); } .verdict.skip { color: var(--skip); }
+    .tag { font: .75rem ui-monospace, monospace; color: var(--muted); }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+          padding: .75rem; overflow-x: auto; font-size: .8rem; margin: .5rem 0; max-height: 20rem; overflow-y: auto; }
+    summary { cursor: pointer; color: var(--muted); font-size: .875rem; }
+    ul.issues { margin: .25rem 0; padding-left: 1.25rem; font-size: .875rem; }
+    ul.issues code { font-size: .8rem; }
+    .meta { color: var(--muted); font-size: .875rem; }
+  </style>
+</head>
+<body data-status="idle">
+  <h1>zcap-spec examples vs zcap-zod</h1>
+  <p class="meta">
+    Extracts every example from a zcap-spec with
+    <a href="https://github.com/gobengo/zcap-spec-examples">zcap-spec-examples</a>
+    and checks each JSON example against zcap-zod's <code>Zcap</code> schema.
+    <a href="./">Smoke test</a>
+  </p>
+
+  <form id="url-form" method="get">
+    <input type="url" name="url" id="url" required aria-label="zcap-spec URL"
+           placeholder="https://w3c-ccg.github.io/zcap-spec/">
+    <button type="submit">Check</button>
+  </form>
+  <details class="paste">
+    <summary>Or paste the spec's HTML (for specs that don't allow cross-origin fetches)</summary>
+    <form id="paste-form">
+      <textarea id="html" required placeholder="&lt;!doctype html&gt;…"></textarea>
+      <button type="submit">Check pasted HTML</button>
+    </form>
+  </details>
+
+  <div id="badge" aria-hidden="true"></div>
+  <p id="summary" role="status"></p>
+  <div id="examples"></div>
+  <p class="meta" id="build"></p>
+
+  <script type="module">
+    const ZCAP_ZOD_URL = new URL("zcap-zod/index.js", document.baseURI).href
+    const EXTRACTOR_URL = new URL("vendor/zcap-spec-examples/examples.js", document.baseURI).href
+    // The version of the spec zcap-zod targets (see test/zcap-spec-examples-schema.test.ts).
+    const DEFAULT_SPEC_URL = "https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/"
+
+    const { Zcap, RootZcap, DelegatedZcap, ZcapInvocation } = await import(ZCAP_ZOD_URL)
+    const { extractExamplesFromHtml, parseExampleContent } = await import(EXTRACTOR_URL)
+    const schemas = { RootZcap, DelegatedZcap, ZcapInvocation }
+
+    const $ = (id) => document.getElementById(id)
+    function el(tag, props = {}, ...children) {
+      const node = Object.assign(document.createElement(tag), props)
+      node.append(...children)
+      return node
+    }
+
+    function setStatus(status, badge, summary) {
+      document.body.dataset.status = status
+      $("badge").textContent = badge
+      $("summary").textContent = summary
+      document.title = `${badge} zcap-spec examples vs zcap-zod`
+    }
+
+    /** Check one extracted example. */
+    function check(example) {
+      let value
+      try {
+        value = parseExampleContent(example)
+      } catch (error) {
+        // TypeError: not a JSON media type (e.g. message/http). Out of scope.
+        if (error instanceof TypeError) return { kind: "skip", reason: `not JSON (${example.mediaType})` }
+        return { kind: "bad", reason: error.message }
+      }
+      const matched = Object.entries(schemas)
+        .filter(([, schema]) => schema.safeParse(value).success)
+        .map(([name]) => name)
+      const result = Zcap.safeParse(value)
+      if (result.success) return { kind: "ok", value, matched }
+      const whyNot = Object.fromEntries(
+        Object.entries(schemas).map(([name, schema]) => [name, schema.safeParse(value).error.issues]),
+      )
+      return { kind: "bad", value, reason: "not a valid Zcap", whyNot }
+    }
+
+    function issueList(issues) {
+      return el("ul", { className: "issues" }, ...issues.map((issue) =>
+        el("li", {}, el("code", {}, issue.path.join(".") || "(root)"), `: ${issue.message}`)))
+    }
+
+    function render(examples, source) {
+      const container = $("examples")
+      container.replaceChildren()
+      const counts = { ok: 0, bad: 0, skip: 0 }
+      for (const example of examples) {
+        const outcome = check(example)
+        counts[outcome.kind]++
+
+        const title = el("a", {}, example.name)
+        try {
+          if (/^https?:$/.test(new URL(example.url).protocol)) title.href = example.url
+        } catch {}
+        const icon = { ok: "✅", bad: "❌", skip: "➖" }[outcome.kind]
+        const verdict =
+          outcome.kind === "ok" ? `valid Zcap: ${outcome.matched.join(", ")}`
+          : outcome.kind === "skip" ? `skipped: ${outcome.reason}`
+          : outcome.reason
+
+        const section = el("section", {},
+          el("h2", {}, `${icon} `, title, " ", el("span", { className: "tag" }, example.mediaType)),
+          el("p", { className: `verdict ${outcome.kind}` }, verdict),
+        )
+        if (outcome.whyNot) {
+          for (const [name, issues] of Object.entries(outcome.whyNot)) {
+            section.append(el("details", {}, el("summary", {}, `Why not ${name} (${issues.length})`), issueList(issues)))
+          }
+        }
+        section.append(el("details", {}, el("summary", {}, "Example source"), el("pre", {}, el("code", {}, example.content))))
+        container.append(section)
+      }
+
+      const json = counts.ok + counts.bad
+      const skipped = counts.skip ? `; ${counts.skip} non-JSON skipped` : ""
+      if (examples.length === 0) {
+        setStatus("error", "❓", `No examples found in ${source}`)
+      } else if (counts.bad === 0) {
+        setStatus("pass", "✅", `All ${json} JSON examples validate against zcap-zod${skipped}`)
+      } else {
+        setStatus("fail", "❌", `${counts.ok} of ${json} JSON examples validate against zcap-zod${skipped}`)
+      }
+    }
+
+    async function checkUrl(specUrl) {
+      setStatus("running", "⏳", `Fetching ${specUrl}…`)
+      $("examples").replaceChildren()
+      let html
+      try {
+        const response = await fetch(specUrl)
+        if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+        html = await response.text()
+      } catch (error) {
+        setStatus("error", "⚠️",
+          `Couldn't fetch ${specUrl}: ${error.message}. ` +
+          `If the server doesn't send Access-Control-Allow-Origin, paste its HTML below instead.`)
+        return
+      }
+      // Relative example URLs fall back to the URL we fetched, if the spec doesn't declare its own.
+      render(extractExamplesFromHtml(html, { fallbackBaseUrl: specUrl }), specUrl)
+    }
+
+    const params = new URLSearchParams(location.search)
+    const specUrl = params.get("url") || DEFAULT_SPEC_URL
+    $("url").value = specUrl
+
+    $("paste-form").addEventListener("submit", (event) => {
+      event.preventDefault()
+      render(extractExamplesFromHtml($("html").value), "the pasted HTML")
+    })
+
+    checkUrl(specUrl)
+
+    try {
+      const info = await (await fetch("./build-info.json")).json()
+      const commit = el(info.commitUrl ? "a" : "code", {}, info.commit.slice(0, 12))
+      if (info.commitUrl) commit.href = info.commitUrl
+      $("build").replaceChildren("zcap-zod built from commit ", commit, ` at ${info.builtAt}`)
+    } catch {}
+  </script>
+</body>
+</html>

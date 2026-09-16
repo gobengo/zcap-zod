@@ -412,6 +412,16 @@ By default esm.sh bundles its own copy of `zod`. If your page already imports `z
 </script>
 ```
 
+## Checking a zcap-spec's examples
+
+The site also has a page that fetches a zcap-spec, extracts its examples with [zcap-spec-examples](https://github.com/gobengo/zcap-spec-examples), and validates each JSON example against `Zcap`, showing which schema it matched or why it didn't:
+
+```
+https://gobengo.github.io/zcap-zod/spec-examples.html?url=https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/
+```
+
+Change `url` to check any other version or draft of the spec. The spec has to allow cross-origin fetches (GitHub Pages does); otherwise paste its HTML into the page. For the targeted version, examples 1–5 are expected to fail: they are the informative "Zcap by Example" narrative, which lags the v0.4 data model (see `test/zcap-spec-examples-schema.test.ts`).
+
 ## JSON Schema
 
 For JSON-Schema-aware tooling, every push to `main` also publishes a JSON Schema (draft 2020-12) generated from these zod schemas:
@@ -432,7 +442,7 @@ Print it locally with `npm run build && npm run json-schema`.
 npm install
 npm test     # node --test, against the TypeScript source
 npm run build  # tsc -> dist/*.js + dist/*.d.ts
-npm run dev    # tsc --watch + the demo page at http://localhost:8080/
+npm run dev    # tsc --watch + the demo pages at http://localhost:8080/ (and /spec-examples.html)
 npm run build:site  # build + assemble _site/, what GitHub Pages deploys
 npm run json-schema # print the JSON Schema generated from dist/
 ```

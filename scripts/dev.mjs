@@ -6,7 +6,9 @@
 //
 //   /                  -> demo/index.html
 //   /zcap-zod/*        -> dist/* (zod imports rewritten, as on Pages)
+//   /spec-examples.html -> demo/spec-examples.html
 //   /vendor/zod/*      -> node_modules/zod/*
+//   /vendor/zcap-spec-examples/* -> node_modules/zcap-spec-examples/dist/*
 //   /build-info.json   -> generated per request
 //
 // Usage: npm run dev   (PORT=3000 npm run dev to change the port)
@@ -37,6 +39,7 @@ const watcher = spawn(tsc, ["-p", "tsconfig.json", "--watch", "--preserveWatchOu
 const mounts = [
   ["/zcap-zod/", join(root, "dist")],
   ["/vendor/zod/", join(root, "node_modules", "zod")],
+  ["/vendor/zcap-spec-examples/", join(root, "node_modules", "zcap-spec-examples", "dist")],
 ]
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -48,6 +51,7 @@ const types = {
 
 function resolve(pathname) {
   if (pathname === "/" || pathname === "/index.html") return join(root, "demo", "index.html")
+  if (pathname === "/spec-examples.html") return join(root, "demo", "spec-examples.html")
   for (const [prefix, dir] of mounts) {
     if (!pathname.startsWith(prefix)) continue
     const file = normalize(join(dir, pathname.slice(prefix.length)))
