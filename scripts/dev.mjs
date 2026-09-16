@@ -5,7 +5,7 @@
 // refresh always tests the latest dist/:
 //
 //   /                  -> demo/index.html
-//   /zcap-zod/*        -> dist/*
+//   /zcap-zod/*        -> dist/* (zod imports rewritten, as on Pages)
 //   /vendor/zod/*      -> node_modules/zod/*
 //   /build-info.json   -> generated per request
 //
@@ -15,6 +15,7 @@ import { existsSync, readFile } from "node:fs"
 import { createServer } from "node:http"
 import { dirname, extname, join, normalize, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { rewriteZodImports } from "./rewrite-zod-imports.mjs"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
 const port = Number(process.env.PORT ?? 8080)
@@ -72,7 +73,12 @@ function buildInfo() {
 const server = createServer((req, res) => {
   const { pathname } = new URL(req.url ?? "/", "http://localhost")
   const send = (status, body, type = "text/plain; charset=utf-8") => {
-    res.writeHead(status, { "content-type": type, "cache-control": "no-store" })
+    res.writeHead(status, {
+      "content-type": type,
+      "cache-control": "no-store",
+      // Like GitHub Pages, so snippets pasted into other pages can import from here.
+      "access-control-allow-origin": "*",
+    })
     res.end(body)
   }
   if (pathname === "/build-info.json") {
@@ -82,6 +88,14 @@ const server = createServer((req, res) => {
   if (!file) return send(404, "Not found")
   readFile(file, (error, data) => {
     if (error) return send(404, "Not found")
+    if (pathname.startsWith("/zcap-zod/") && extname(file) === ".js") {
+      const depth = pathname.slice("/zcap-zod/".length).split("/").length - 1
+      try {
+        data = rewriteZodImports(data.toString("utf8"), depth)
+      } catch (rewriteError) {
+        return send(500, String(rewriteError))
+      }
+    }
     send(200, data, types[extname(file)] ?? "application/octet-stream")
   })
 })

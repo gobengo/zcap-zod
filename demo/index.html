@@ -6,81 +6,143 @@
   <title>zcap-zod smoke test</title>
   <link rel="icon" href="data:,">
   <!--
-    The built zcap-zod imports the bare specifier "zod/v4". The site build
-    vendors zod next to it, and this import map points the browser at it, so
-    the page tests exactly the dist/ produced for this commit.
+    No import map on purpose: each test runs its snippet exactly as shown,
+    importing zcap-zod by absolute URL, the same way a page elsewhere would.
   -->
-  <script type="importmap">
-    { "imports": { "zod/v4": "./vendor/zod/v4/index.js" } }
-  </script>
   <style>
-    :root { color-scheme: light dark; --ok: #1a7f37; --bad: #cf222e; --muted: #6e7781; }
-    body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 16px; }
+    :root {
+      color-scheme: light dark;
+      --ok: #1a7f37; --bad: #cf222e; --muted: #6e7781;
+      --code-bg: #f6f8fa; --border: #d0d7de;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ok: #3fb950; --bad: #f85149; --muted: #8b949e; --code-bg: #161b22; --border: #30363d; }
+    }
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 16px; }
     #badge { font-size: 5rem; line-height: 1; }
     #summary { font-size: 1.25rem; font-weight: 600; }
     [data-status="pass"] #summary { color: var(--ok); }
     [data-status="fail"] #summary { color: var(--bad); }
-    ul { padding-left: 0; list-style: none; }
-    li { margin: .5rem 0; }
-    li pre { margin: .25rem 0 0 1.75rem; white-space: pre-wrap; font-size: .8rem; color: var(--muted); }
-    .meta { color: var(--muted); font-size: .875rem; }
-    code { font-size: .9em; }
+    section { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1.5rem; }
+    h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+    .snippet { position: relative; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+          padding: .75rem; overflow-x: auto; font-size: .8rem; margin: .5rem 0; }
+    pre.output { max-height: 16rem; overflow: auto; }
+    .copy { position: absolute; top: .4rem; right: .4rem; font: inherit; font-size: .75rem;
+            padding: .15rem .5rem; cursor: pointer; }
+    .label { color: var(--muted); font-size: .8rem; margin: .75rem 0 0; }
+    .meta { color: var(--muted); font-size: .875rem; margin-top: 2rem; }
   </style>
 </head>
 <body data-status="running">
   <div id="badge" aria-hidden="true">⏳</div>
   <p id="summary" role="status">Running…</p>
-  <ul id="checks"></ul>
+  <p class="meta">Each snippet below is the exact code that ran. Paste it into any HTML file to try it.</p>
+  <div id="tests"></div>
   <p class="meta" id="build">Build info unavailable.</p>
 
   <script type="module">
-    const checks = document.getElementById("checks")
+    // Absolute URL of the zcap-zod build served next to this page.
+    const MODULE_URL = new URL("zcap-zod/index.js", document.baseURI).href
+
+    // `code` is shown verbatim and executed verbatim. The harness only appends
+    // `export { … }` for the names in `expose`, so it can inspect the outcome.
+    const tests = [
+      {
+        name: "Import zcap-zod",
+        code: `import * as zcapZod from "${MODULE_URL}"
+
+console.log(Object.keys(zcapZod))`,
+        expose: ["zcapZod"],
+        check: ({ zcapZod }) => ({
+          ok: typeof zcapZod.Zcap?.safeParse === "function",
+          output: Object.keys(zcapZod),
+        }),
+      },
+      {
+        name: "Parse a valid root zcap",
+        code: `import { Zcap } from "${MODULE_URL}"
+
+const result = Zcap.safeParse({
+  "@context": "https://w3id.org/zcap/v1",
+  id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+  invocationTarget: "https://example.com/foo",
+  controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+})
+console.log(result.success) // true`,
+        expose: ["result"],
+        check: ({ result }) => ({
+          ok: result.success === true,
+          output: result.success ? result.data : result.error.issues,
+        }),
+      },
+      {
+        name: "Reject a non-zcap",
+        code: `import { Zcap } from "${MODULE_URL}"
+
+const result = Zcap.safeParse({ hello: "world" })
+console.log(result.success) // false
+console.log(result.error.issues)`,
+        expose: ["result"],
+        check: ({ result }) => ({
+          ok: result.success === false,
+          output: result.success ? { unexpectedlyAccepted: result.data } : result.error.issues,
+        }),
+      },
+    ]
+
+    const container = document.getElementById("tests")
     const results = []
 
-    function record(name, ok, detail = "") {
-      results.push({ name, ok, detail })
-      const li = document.createElement("li")
-      li.textContent = `${ok ? "✅" : "❌"} ${name}`
-      if (detail) {
-        const pre = document.createElement("pre")
-        pre.textContent = detail
-        li.append(pre)
+    function el(tag, props = {}, ...children) {
+      const node = Object.assign(document.createElement(tag), props)
+      node.append(...children)
+      return node
+    }
+
+    for (const test of tests) {
+      const html = `<script type="module">\n${test.code}\n<\/script>`
+      const heading = el("h2", {}, `⏳ ${test.name}`)
+      const copy = el("button", { className: "copy", type: "button" }, "Copy")
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(html)
+          copy.textContent = "Copied"
+        } catch {
+          copy.textContent = "Copy failed"
+        }
+        setTimeout(() => (copy.textContent = "Copy"), 1500)
+      })
+      const output = el("pre", { className: "output" }, "…")
+      container.append(
+        el("section", {},
+          heading,
+          el("div", { className: "snippet" }, el("pre", {}, el("code", {}, html)), copy),
+          el("p", { className: "label" }, "Result"),
+          output,
+        ),
+      )
+
+      let ok = false
+      try {
+        const source = `${test.code}\nexport { ${test.expose.join(", ")} }\n`
+        const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }))
+        try {
+          const outcome = test.check(await import(url))
+          ok = outcome.ok
+          output.textContent = JSON.stringify(outcome.output, null, 2)
+        } finally {
+          URL.revokeObjectURL(url)
+        }
+      } catch (error) {
+        output.textContent = String(error?.stack ?? error)
       }
-      checks.append(li)
+      heading.textContent = `${ok ? "✅" : "❌"} ${test.name}`
+      results.push(ok)
     }
 
-    const rootZcap = {
-      "@context": "https://w3id.org/zcap/v1",
-      id: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
-      invocationTarget: "https://example.com/foo",
-      controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
-    }
-    const notAZcap = { hello: "world", id: 42 }
-
-    try {
-      const lib = await import("./zcap-zod/index.js")
-      record("Imported zcap-zod", true, `exports: ${Object.keys(lib).sort().join(", ")}`)
-
-      const good = lib.Zcap.safeParse(rootZcap)
-      record(
-        "Parsed a valid root zcap",
-        good.success,
-        good.success ? JSON.stringify(good.data, null, 2) : JSON.stringify(good.error.issues, null, 2),
-      )
-
-      const bad = lib.Zcap.safeParse(notAZcap)
-      record(
-        "Rejected a non-zcap",
-        !bad.success,
-        bad.success
-          ? `Unexpectedly accepted: ${JSON.stringify(notAZcap)}`
-          : `Errored as expected (${bad.error.issues.length} issue(s))`,
-      )
-    } catch (error) {
-      record("Imported zcap-zod", false, String(error?.stack ?? error))
-    }
-
-    const pass = results.length === 3 && results.every((r) => r.ok)
+    const pass = results.every(Boolean)
     document.body.dataset.status = pass ? "pass" : "fail"
     document.getElementById("badge").textContent = pass ? "✅" : "❌"
     document.getElementById("summary").textContent = pass
@@ -90,12 +152,10 @@
 
     try {
       const info = await (await fetch("./build-info.json")).json()
-      const el = document.getElementById("build")
-      el.textContent = "Built from commit "
-      const code = document.createElement(info.commitUrl ? "a" : "code")
-      code.textContent = info.commit.slice(0, 12)
-      if (info.commitUrl) code.href = info.commitUrl
-      el.append(code, ` at ${info.builtAt}`)
+      const build = document.getElementById("build")
+      const commit = el(info.commitUrl ? "a" : "code", {}, info.commit.slice(0, 12))
+      if (info.commitUrl) commit.href = info.commitUrl
+      build.replaceChildren("Built from commit ", commit, ` at ${info.builtAt}`)
     } catch {}
   </script>
 </body>

@@ -1,15 +1,18 @@
 // Assemble a static site that smoke-tests the built zcap-zod in a browser.
 //
 //   _site/index.html        demo page (from demo/index.html)
-//   _site/zcap-zod/         the tsc output (dist/)
-//   _site/vendor/zod/       zod's ESM files, resolved via the page's import map
+//   _site/zcap-zod/         the tsc output (dist/), with "zod/v4" imports
+//                           rewritten to the vendored copy so any page can
+//                           import it by absolute URL without an import map
+//   _site/vendor/zod/       zod's ESM files
 //   _site/build-info.json   commit + timestamp shown on the page
 //
 // Run `npm run build` first (or use `npm run build:site`).
 import { execSync } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { rewriteZodImports } from "./rewrite-zod-imports.mjs"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
 const out = join(root, "_site")
@@ -27,7 +30,14 @@ rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
 
 cpSync(join(root, "demo", "index.html"), join(out, "index.html"))
-cpSync(dist, join(out, "zcap-zod"), { recursive: true })
+const lib = join(out, "zcap-zod")
+cpSync(dist, lib, { recursive: true })
+for (const file of readdirSync(lib, { recursive: true })) {
+  if (!file.endsWith(".js")) continue
+  const path = join(lib, file)
+  const depth = relative(lib, dirname(path)).split(sep).filter(Boolean).length
+  writeFileSync(path, rewriteZodImports(readFileSync(path, "utf8"), depth))
+}
 cpSync(zod, join(out, "vendor", "zod"), {
   recursive: true,
   // Browsers only need the ESM build; skip TS sources and CJS/typings.
