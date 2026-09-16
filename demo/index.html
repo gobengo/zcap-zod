@@ -7,9 +7,10 @@
   <link rel="icon" href="data:,">
   <script>
     // No ?url yet: redirect to the default, so every check is a shareable link.
+    // The zcap-spec landing page lists versions; the checker resolves it to the latest.
     if (!new URLSearchParams(location.search).get("url")) {
       const next = new URL(location.href)
-      next.search = "?url=" + "https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/"
+      next.search = "?url=" + "https://w3c-ccg.github.io/zcap-spec/"
       location.replace(next)
     }
   </script>
@@ -78,7 +79,7 @@
     </p>
     <form id="url-form" method="get">
       <input type="url" name="url" id="url" required aria-label="URL to check"
-             placeholder="https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/">
+             placeholder="https://w3c-ccg.github.io/zcap-spec/">
       <button type="submit">Check</button>
     </form>
     <details class="paste">
@@ -557,7 +558,28 @@ console.table(results)`,
       }
     }
 
-    async function checkUrl(url) {
+    /**
+     * Where an HTML page with no examples sends browsers, if it says: a
+     * <meta http-equiv="refresh">, or a landing page that redirects with a
+     * script, like https://w3c-ccg.github.io/zcap-spec/ ("Loading this page
+     * redirects to <a href="./v0.4.0-rc.5/">", from `var latest = "v0.4.0-rc.5"`).
+     * fetch() can't run that script, so read the target from the markup.
+     */
+    function findRedirect(html, baseUrl) {
+      const candidates = [
+        html.match(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*?url\s*=\s*([^"'\s>]+)/i)?.[1],
+        html.match(/redirects\s+to\s*<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/i)?.[1],
+        html.match(/\blatest\s*=\s*["']([^"'/]+)\/?["']/)?.[1]?.concat("/"),
+      ]
+      for (const candidate of candidates) {
+        if (!candidate) continue
+        try {
+          return new URL(candidate.replace(/&amp;/g, "&"), baseUrl).href
+        } catch {}
+      }
+    }
+
+    async function checkUrl(url, { redirects = 0 } = {}) {
       $("url").value = url
       $("check-results").replaceChildren()
       setStatus("running", `⏳ Fetching ${url}…`)
@@ -572,7 +594,18 @@ console.table(results)`,
           `If the server doesn't send Access-Control-Allow-Origin, paste the content below instead.`)
         return
       }
-      checkText(text, { contentType: response.headers.get("content-type") ?? "", source: url, baseUrl: response.url || url })
+      const contentType = response.headers.get("content-type") ?? ""
+      const baseUrl = response.url || url
+      // A landing page (no examples of its own) that points at the real document:
+      // follow it, and put the resolved URL in ?url= so the link names that version.
+      if (!looksLikeJson(contentType, text) && extractExamplesFromHtml(text).length === 0) {
+        const target = findRedirect(text, baseUrl)
+        if (target && target !== url && target !== baseUrl && redirects < 3) {
+          history.replaceState(null, "", queryFor(target))
+          return checkUrl(target, { redirects: redirects + 1 })
+        }
+      }
+      checkText(text, { contentType, source: url, baseUrl })
     }
 
     // Keep ?url= readable: only escape what would break the query string.

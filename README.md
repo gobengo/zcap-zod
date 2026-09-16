@@ -417,13 +417,13 @@ By default esm.sh bundles its own copy of `zod`. If your page already imports `z
 The site's homepage fetches a URL and checks the zcaps in it, showing which schema each one matches or why it doesn't:
 
 ```
-https://gobengo.github.io/zcap-zod/?url=https://w3c-ccg.github.io/zcap-spec/v0.4.0-draft/
+https://gobengo.github.io/zcap-zod/?url=https://w3c-ccg.github.io/zcap-spec/
 ```
 
 - **HTML**, such as a zcap-spec: its examples are extracted with [zcap-spec-examples](https://github.com/gobengo/zcap-spec-examples) and each JSON example is checked against `Zcap`.
 - **JSON**, a zcap or an array of zcaps: it is checked against `Zcap`, with the issues from each schema.
 
-Without `?url`, the page redirects to the zcap-spec v0.4.0 draft. The URL has to allow cross-origin fetches (GitHub Pages does); otherwise paste its content into the page. For the targeted spec version, examples 1–5 are expected to fail: they are the informative "Zcap by Example" narrative, which lags the v0.4 data model (see `test/zcap-spec-examples-schema.test.ts`). The old `spec-examples.html` address redirects to the homepage.
+Without `?url`, the page uses the zcap-spec's landing page, `https://w3c-ccg.github.io/zcap-spec/`. That page only lists versions and redirects to the latest with a script, so the checker reads where it points (a meta refresh, its "redirects to" link, or its `latest` version) and replaces `?url=` with that version's address, e.g. `?url=https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.5/`. The URL has to allow cross-origin fetches (GitHub Pages does); otherwise paste its content into the page. For the targeted spec version, examples 1–5 are expected to fail: they are the informative "Zcap by Example" narrative, which lags the v0.4 data model (see `test/zcap-spec-examples-schema.test.ts`). The old `spec-examples.html` address redirects to the homepage.
 
 ## JSON Schema
 
