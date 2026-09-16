@@ -1,11 +1,35 @@
 {
   "name": "zcap-zod",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Zod schemas for W3C CCG Authorization Capabilities (zcaps): root zcaps, delegated zcaps, and capability invocations.",
+  "keywords": [
+    "zcap",
+    "authorization-capabilities",
+    "ocap",
+    "capabilities",
+    "w3c",
+    "ccg",
+    "zod",
+    "schema",
+    "validation",
+    "linked-data"
+  ],
+  "license": "MIT",
+  "author": "Benjamin Goering <ben@bengo.co>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gobengo/zcap-zod.git"
+  },
+  "homepage": "https://github.com/gobengo/zcap-zod#readme",
+  "bugs": {
+    "url": "https://github.com/gobengo/zcap-zod/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
@@ -30,6 +54,10 @@
   "files": [
     "dist",
     "src",
-    "README.md"
-  ]
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
 }

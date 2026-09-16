@@ -390,3 +390,7 @@ The `zcap-spec/` directory is a vendored subtree of the [spec repository](https:
 - [Authorization Capabilities for Linked Data v0.4.0-rc.2](https://w3c-ccg.github.io/zcap-spec/v0.4.0-rc.2/)
 - [Verifiable Credential Data Integrity](https://www.w3.org/TR/vc-data-integrity/)
 - [Zod](https://zod.dev)
+
+## License
+
+MIT
