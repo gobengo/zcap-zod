@@ -65,6 +65,9 @@
     .label { color: var(--muted); font-size: .8rem; margin: .75rem 0 0; }
     .meta { color: var(--muted); font-size: .875rem; }
     #build { margin-top: 2rem; }
+    body.dragging { outline: 3px dashed var(--ok); outline-offset: -8px; }
+    body.dragging::after { content: "Drop a zcap JSON file to check it"; position: fixed; inset: auto 0 1.5rem;
+      text-align: center; font-weight: 600; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -79,6 +82,10 @@
       <a href="https://github.com/gobengo/zcap-spec-examples">zcap-spec-examples</a> and each JSON example is checked.
       If it returns JSON (a zcap, or an array of zcaps), that is checked.
       Each result says which zcap-zod schema it matches, or why it doesn't.
+    </p>
+    <p class="meta">
+      You can also drop a zcap JSON file on this page to check it.
+      <a id="download-example" href="#" download="example-zcap.json">Click here to download example-zcap.json.</a>
     </p>
     <form id="url-form" method="get">
       <input type="url" name="url" id="url" required aria-label="URL to check"
@@ -599,6 +606,14 @@ console.table(results)`,
       }
     }
 
+    /** The `name=` parameter of a data: URL (set for dropped files), if any. */
+    function dataUrlName(url) {
+      const name = url.slice(0, url.indexOf(",")).match(/;name=([^;,]*)/)?.[1]
+      try {
+        return name && decodeURIComponent(name)
+      } catch {}
+    }
+
     // The ?url= query last checked. Following a #heading link fires popstate
     // too; that shouldn't re-fetch and re-render the results.
     let checkedSearch
@@ -621,6 +636,18 @@ console.table(results)`,
       }
       const contentType = response.headers.get("content-type") ?? ""
       const baseUrl = response.url || url
+      // data: URLs (e.g. from a dropped file) must hold JSON.
+      if (url.startsWith("data:")) {
+        const name = dataUrlName(url)
+        const source = name ? `the dropped file ${name}` : "this data: URL"
+        try {
+          JSON.parse(text)
+        } catch (error) {
+          setStatus("error", `⚠️ ${source} isn't valid JSON, and a data: URL must contain JSON: ${error.message}`)
+          return
+        }
+        return checkText(text, { contentType: "application/json", source })
+      }
       // A landing page (no examples of its own) that points at the real document:
       // follow it, and put the resolved URL in ?url= so the link names that version.
       if (!looksLikeJson(contentType, text) && extractExamplesFromHtml(text).length === 0) {
@@ -635,6 +662,66 @@ console.table(results)`,
 
     // Keep ?url= readable: only escape what would break the query string.
     const queryFor = (url) => "?url=" + url.replace(/[%&#+ ]/g, encodeURIComponent)
+
+    // Drop a JSON file anywhere on the page: check it via ?url=<data: URL>, so
+    // the result is a link like any other.
+    function bytesToBase64(bytes) {
+      let binary = ""
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      return btoa(binary)
+    }
+    function dataUrlFor(bytes, name) {
+      return `data:application/json;name=${encodeURIComponent(name)};base64,${bytesToBase64(bytes)}`
+    }
+    const hasFiles = (event) => [...(event.dataTransfer?.types ?? [])].includes("Files")
+    let dragDepth = 0
+    addEventListener("dragenter", (event) => {
+      if (!hasFiles(event)) return
+      dragDepth++
+      document.body.classList.add("dragging")
+    })
+    addEventListener("dragleave", (event) => {
+      if (!hasFiles(event)) return
+      dragDepth = Math.max(0, dragDepth - 1)
+      if (dragDepth === 0) document.body.classList.remove("dragging")
+    })
+    addEventListener("dragover", (event) => {
+      if (hasFiles(event)) event.preventDefault()
+    })
+    addEventListener("drop", async (event) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      dragDepth = 0
+      document.body.classList.remove("dragging")
+      const [file] = event.dataTransfer.files
+      if (!file) return
+      const url = dataUrlFor(new Uint8Array(await file.arrayBuffer()), file.name)
+      history.pushState(null, "", queryFor(url))
+      $("checker").scrollIntoView({ behavior: "smooth" })
+      checkUrl(url)
+    })
+
+    // A valid delegated zcap to download, try, and edit.
+    const EXAMPLE_ZCAP = {
+      "@context": ["https://w3id.org/zcap/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+      id: "urn:uuid:cdc77118-6bfa-11ec-aceb-10bf48838a41",
+      parentCapability: "urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo",
+      invocationTarget: "https://example.com/foo",
+      controller: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+      expires: "2021-11-03T18:33:51Z",
+      allowedAction: ["read"],
+      proof: {
+        type: "Ed25519Signature2020",
+        created: "2021-10-27T18:33:51Z",
+        verificationMethod: "did:key:z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9#z6MkfWKcvBiKCfNgz5UUGseNt37t4dguEvFgJ9XvX2UV6zB9",
+        proofPurpose: "capabilityDelegation",
+        capabilityChain: ["urn:zcap:root:https%3A%2F%2Fexample.com%2Ffoo"],
+        proofValue: "z3t9BCQyF21MDVYmLKc9zbLreqx4wBtQnUsd5aqyoWS5FfhapRz7QjPNLcgKAornUVmJR4ZjbGpuxRFnffxX1ZjtF",
+      },
+    }
+    $("download-example").href = URL.createObjectURL(
+      new Blob([JSON.stringify(EXAMPLE_ZCAP, null, 2) + "\n"], { type: "application/json" }),
+    )
 
     $("url-form").addEventListener("submit", (event) => {
       event.preventDefault()
